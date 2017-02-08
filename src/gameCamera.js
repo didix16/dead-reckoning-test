@@ -1,4 +1,4 @@
-const GameObject = require("./gameObject");
+const GameObject = require('./gameObject')
 /**
  * A camera that foucus the scene in some part of the game world
  * @public
@@ -8,11 +8,11 @@ const GameObject = require("./gameObject");
  * @param {height} height - The height of the GameCamera
  * @constructor {GameCamera} GameCamera
  */
-class GameCamera extends GameObject{
+class GameCamera extends GameObject {
 
-    constructor(x,y,width,height){
-        super(x,y,width,height);
-    }
+  constructor (x, y, width, height) {
+    super(x, y, width, height)
+  }
 
     /**
      * Centers the camera to the object. If the object is in some corner, the camera will be adjusted
@@ -20,15 +20,14 @@ class GameCamera extends GameObject{
      * @param {GameObject} object - A GameObject to be focused on
      * @return {GameCamera} - Return a self reference for chaining
      */
-    focusOn(object){
+  focusOn (object) {
+    this.x = object.x - this.width / 2
+    this.y = object.y - this.height / 2
 
-        this.x = object.x - this.width / 2;
-        this.y = object.y - this.height / 2;
-
-        if(this.x < 0) this.x = 0;
-        if(this.y < 0) this.y = 0;
-        return this;
-    }
+    if (this.x < 0) this.x = 0
+    if (this.y < 0) this.y = 0
+    return this
+  }
 }
 
-module.exports = GameCamera;
+module.exports = GameCamera

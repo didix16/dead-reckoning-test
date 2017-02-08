@@ -1,14 +1,14 @@
-const GameObject = require("./gameObject");
+const GameObject = require('./gameObject')
 
 /**
  * Represents a player of the game
- * @public 
+ * @public
  */
 class Player extends GameObject {
 
-    constructor(){
-        super();
-    }
+  constructor () {
+    super()
+  }
 }
 
-module.exports = Player;
+module.exports = Player

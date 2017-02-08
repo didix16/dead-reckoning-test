@@ -1,4 +1,4 @@
-const Renderable = require("./render");
+const Renderable = require('./render')
 /**
  * @ Represents the whole game world with dimension width x height
  * @public
@@ -8,21 +8,20 @@ const Renderable = require("./render");
  */
 class GameWorld extends Renderable {
 
-    constructor(width, height){
-        super();
-        this.width = width;
-        this.height = height;
-    }
+  constructor (width, height) {
+    super()
+    this.width = width
+    this.height = height
+  }
 
     /**
      * Render the GameWorld
-     * @public 
+     * @public
      * @return {GameWorld} - Return self reference for chaining
      */
-    render(){
-
-        return this;
-    }
+  render () {
+    return this
+  }
 }
 
-module.exports = GameWorld;
+module.exports = GameWorld

@@ -4,13 +4,12 @@
  */
 class Renderable {
 
-    constructor(){
-
-        if(new.target === Renderable){
-            throw new TypeError("Cannot construct interface instance directly!");
-        }
-        if(this.render === undefined){
-            throw new TypeError("This class must implement the render method");
-        }
+  constructor () {
+    if (new.target === Renderable) {
+      throw new TypeError('Cannot construct interface instance directly!')
     }
+    if (this.render === undefined) {
+      throw new TypeError('This class must implement the render method')
+    }
+  }
 }
