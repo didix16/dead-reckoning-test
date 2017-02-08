@@ -1,0 +1,22 @@
+{
+  "name": "dead-reckoning-test",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "build": "browserify src/game.js -o public/js/bundle.js",
+    "watch": "chokidar \"src/**/*.js\" -c \"npm run build\"",
+    "start": "nodemon server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/didix16/dead-reckoning-test.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/didix16/dead-reckoning-test/issues"
+  },
+  "homepage": "https://github.com/didix16/dead-reckoning-test#readme"
+}
