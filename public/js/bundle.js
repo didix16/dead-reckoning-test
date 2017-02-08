@@ -43,6 +43,135 @@ document.addEventListener('keyup', function (e) {
 })
 
 },{}],2:[function(require,module,exports){
+var pSlice = Array.prototype.slice;
+var objectKeys = require('./lib/keys.js');
+var isArguments = require('./lib/is_arguments.js');
+
+var deepEqual = module.exports = function (actual, expected, opts) {
+  if (!opts) opts = {};
+  // 7.1. All identical values are equivalent, as determined by ===.
+  if (actual === expected) {
+    return true;
+
+  } else if (actual instanceof Date && expected instanceof Date) {
+    return actual.getTime() === expected.getTime();
+
+  // 7.3. Other pairs that do not both pass typeof value == 'object',
+  // equivalence is determined by ==.
+  } else if (!actual || !expected || typeof actual != 'object' && typeof expected != 'object') {
+    return opts.strict ? actual === expected : actual == expected;
+
+  // 7.4. For all other Object pairs, including Array objects, equivalence is
+  // determined by having the same number of owned properties (as verified
+  // with Object.prototype.hasOwnProperty.call), the same set of keys
+  // (although not necessarily the same order), equivalent values for every
+  // corresponding key, and an identical 'prototype' property. Note: this
+  // accounts for both named and indexed properties on Arrays.
+  } else {
+    return objEquiv(actual, expected, opts);
+  }
+}
+
+function isUndefinedOrNull(value) {
+  return value === null || value === undefined;
+}
+
+function isBuffer (x) {
+  if (!x || typeof x !== 'object' || typeof x.length !== 'number') return false;
+  if (typeof x.copy !== 'function' || typeof x.slice !== 'function') {
+    return false;
+  }
+  if (x.length > 0 && typeof x[0] !== 'number') return false;
+  return true;
+}
+
+function objEquiv(a, b, opts) {
+  var i, key;
+  if (isUndefinedOrNull(a) || isUndefinedOrNull(b))
+    return false;
+  // an identical 'prototype' property.
+  if (a.prototype !== b.prototype) return false;
+  //~~~I've managed to break Object.keys through screwy arguments passing.
+  //   Converting to array solves the problem.
+  if (isArguments(a)) {
+    if (!isArguments(b)) {
+      return false;
+    }
+    a = pSlice.call(a);
+    b = pSlice.call(b);
+    return deepEqual(a, b, opts);
+  }
+  if (isBuffer(a)) {
+    if (!isBuffer(b)) {
+      return false;
+    }
+    if (a.length !== b.length) return false;
+    for (i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
+  }
+  try {
+    var ka = objectKeys(a),
+        kb = objectKeys(b);
+  } catch (e) {//happens when one is a string literal and the other isn't
+    return false;
+  }
+  // having the same number of owned properties (keys incorporates
+  // hasOwnProperty)
+  if (ka.length != kb.length)
+    return false;
+  //the same set of keys (although not necessarily the same order),
+  ka.sort();
+  kb.sort();
+  //~~~cheap key test
+  for (i = ka.length - 1; i >= 0; i--) {
+    if (ka[i] != kb[i])
+      return false;
+  }
+  //equivalent values for every corresponding key, and
+  //~~~possibly expensive deep test
+  for (i = ka.length - 1; i >= 0; i--) {
+    key = ka[i];
+    if (!deepEqual(a[key], b[key], opts)) return false;
+  }
+  return typeof a === typeof b;
+}
+
+},{"./lib/is_arguments.js":3,"./lib/keys.js":4}],3:[function(require,module,exports){
+var supportsArgumentsClass = (function(){
+  return Object.prototype.toString.call(arguments)
+})() == '[object Arguments]';
+
+exports = module.exports = supportsArgumentsClass ? supported : unsupported;
+
+exports.supported = supported;
+function supported(object) {
+  return Object.prototype.toString.call(object) == '[object Arguments]';
+};
+
+exports.unsupported = unsupported;
+function unsupported(object){
+  return object &&
+    typeof object == 'object' &&
+    typeof object.length == 'number' &&
+    Object.prototype.hasOwnProperty.call(object, 'callee') &&
+    !Object.prototype.propertyIsEnumerable.call(object, 'callee') ||
+    false;
+};
+
+},{}],4:[function(require,module,exports){
+exports = module.exports = typeof Object.keys === 'function'
+  ? Object.keys : shim;
+
+exports.shim = shim;
+function shim (obj) {
+  var keys = [];
+  for (var key in obj) keys.push(key);
+  return keys;
+}
+
+},{}],5:[function(require,module,exports){
 // randomColor by David Merfield under the CC0 license
 // https://github.com/davidmerfield/randomColor/
 
@@ -473,9 +602,10 @@ document.addEventListener('keyup', function (e) {
   return randomColor;
 }));
 
-},{}],3:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 const kb = require('@dasilvacontin/keyboard');
 const randomColor = require("randomcolor");
+const deepEqual = require("deep-equal");
 document.addEventListener("keydown",function(e){
 
     e.preventDefault();
@@ -489,11 +619,28 @@ document.addEventListener("keyup",function(e){
 const socket = io();
 
 
-const myPlayer = {x: 100, y: 100, color: randomColor()}; // LA referencia es constante pero el contenido cambia!
+const myPlayer = {
+    x: 100,
+    y: 100,
+    vx: 0,
+    vy: 0,
+    inputs: {
+        LEFT_ARROW: false,
+        RIGHT_ARROW: false,
+        DOWN_ARROW: false,
+        UP_ARROW: false
+    },
+    color: randomColor()
+}; // LA referencia es constante pero el contenido cambia!
 let myPlayerId = null;
 
 //hash playeId => playerData
 let players = {};
+
+let lastPingTimestap;
+let clockDiff = 0;
+let ping = Infinity;
+const ACCEL = 1 / 1000;
 
 var SocketController = {
 
@@ -507,31 +654,88 @@ var SocketController = {
 
     playerMoved: function(player){
          players[player.id] = player;
+         const delta = (Date.now() + clockDiff) - player.timestamp
+
+         // increment position due the current velocity
+         // and update the acceleration acordingly
+         player.x += player.vx * delta + (ACCEL * Math.pow(delta,2)/2)
+         player.y += player.vy * delta + (ACCEL * Math.pow(delta,2)/2)
+         const {inputs} = player;
+         if(inputs.LEFT_ARROW && !inputs.RIGHT_ARROW) {
+
+             player.x -= ACCEL * Math.pow(delta,2)/2;
+             player.vx -= ACCEL * delta;
+         }else if(!inputs.LEFT_ARROW && inputs.RIGHT_ARROW){
+                player.x += ACCEL * Math.pow(delta,2)/2;
+                player.vx += ACCEL * delta;
+         }
+
+         if(inputs.UP_ARROW && !inputs.DOWN_ARROW) {
+
+             player.y -= ACCEL * Math.pow(delta,2)/2;
+             player.vy -= ACCEL * delta;
+         }else if(!inputs.UP_ARROW && inputs.DOWN_ARROW){
+                player.y += ACCEL * Math.pow(delta,2)/2;
+                player.vy += ACCEL * delta;
+         }
     },
     userDisconnect: function(playerId){
 
         delete players[playerId];
         console.info(`The player ${playerId} has been disconnected`);
         
+    },
+    "game:pong": function(serverNow){
+
+        ping = (Date.now() - lastPingTimestap) / 2;
+        clockDiff = Date.now() - serverNow+ping;
     }
 
     
 };
 
 
-function logic(){
 
-    if(kb.isKeyDown(kb.LEFT_ARROW)){
+function updateInputs () {
+    const { inputs } = myPlayer
 
-        myPlayer.x--;
-        socket.emit("move",myPlayer);
-    }else if(kb.isKeyDown(kb.RIGHT_ARROW)){
+    for (let key in inputs) {
+        inputs[key] = kb.isKeyDown(kb[key])
+    }
+}
 
-        myPlayer.x++;
-        socket.emit("move",myPlayer);
+function logic(delta){
+
+    // JSON for two equal objects should be the same string
+    // const oldInputs = JSON.stringify(Object.assign({}, myPlayer.inputs))
+    const oldInputs = Object.assign({},  myPlayer.inputs)
+    updateInputs()
+
+    const vInc = ACCEL * delta
+    for (let playerId in players) {
+        const player = players[playerId]
+        const { inputs } = player
+        
+        if (inputs.LEFT_ARROW) player.vx -= vInc
+        if (inputs.RIGHT_ARROW) player.vx += vInc
+        if (inputs.UP_ARROW) player.vy -= vInc
+        if (inputs.DOWN_ARROW) player.vy += vInc
+
+        let press = false;
+        for(let i in inputs){
+            
+            if(inputs[i]){ press = true;break;}
+        }
+
+        player.x += player.vx * delta
+        player.y += player.vy * delta
+        
     }
 
-    
+    if (!deepEqual(myPlayer.inputs, oldInputs)) {
+        socket.emit('move', myPlayer)
+    }
+
 }
 
 const canvas = document.createElement("canvas");
@@ -555,17 +759,28 @@ function render(){
     }
 }
 
+let past = Date.now();
 function gameLoop(){
 
     requestAnimationFrame(gameLoop);
-    logic();
+    const now = Date.now();
+    const delta = now - past
+    past = now
+    logic(delta);
     render();
+}
+
+
+function startPingHandshake(){
+
+    lastPingTimestap = Date.now();
+    socket.emit('game:ping');
 }
 
 socket.on("connect", function(){
 
     // Register on handlers
-    for( evnt in SocketController){
+    for( let evnt in SocketController){
 
         if(SocketController.hasOwnProperty(evnt)){
             socket.on(evnt, SocketController[evnt]);
@@ -573,5 +788,7 @@ socket.on("connect", function(){
     }
 });
 
+
+setInterval(startPingHandshake,250)
 requestAnimationFrame(gameLoop);
-},{"@dasilvacontin/keyboard":1,"randomcolor":2}]},{},[3]);
+},{"@dasilvacontin/keyboard":1,"deep-equal":2,"randomcolor":5}]},{},[6]);
