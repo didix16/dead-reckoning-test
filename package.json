@@ -4,11 +4,12 @@
   "description": "",
   "main": "server.js",
   "scripts": {
+    "prebuild": "npm run test",
     "build": "browserify src/game.js -o public/js/bundle.js",
     "watch": "chokidar \"src/**/*.js\" -c \"npm run build\"",
-    "start": "node server.js",
+    "start": "node src/server.js",
     "postinstall": "npm run build",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "standard \"src/**/*.js\""
   },
   "repository": {
     "type": "git",
@@ -26,7 +27,8 @@
   },
   "devDependencies": {
     "browserify": "^14.0.0",
-    "chokidar-cli": "^1.2.0"
+    "chokidar-cli": "^1.2.0",
+    "standard": "^8.6.0"
   },
   "bugs": {
     "url": "https://github.com/didix16/dead-reckoning-test/issues"

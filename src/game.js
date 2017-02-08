@@ -14,124 +14,93 @@ document.addEventListener("keyup",function(e){
 const socket = io();
 
 
-const myPlayer = {
-    x: 100,
-    y: 100,
-    vx: 0,
-    vy: 0,
-    inputs: {
-        LEFT_ARROW: false,
-        RIGHT_ARROW: false,
-        DOWN_ARROW: false,
-        UP_ARROW: false
-    },
-    color: randomColor()
-}; // LA referencia es constante pero el contenido cambia!
-let myPlayerId = null;
+let myPlayerId = null
+const myInputs = {
+  LEFT_ARROW: false,
+  RIGHT_ARROW: false,
+  UP_ARROW: false,
+  DOWN_ARROW: false
+}
 
-//hash playeId => playerData
-let players = {};
-
-let lastPingTimestap;
-let clockDiff = 0;
-let ping = Infinity;
 const ACCEL = 1 / 1000;
 
-var SocketController = {
+class GameClient{
 
-    "world:init": function(serverPlayers, myId){
-
-        myPlayerId = myId;
-        myPlayer.id = myId;
-        players = serverPlayers;    
-        players[myId] = myPlayer;
-    },
-
-    playerMoved: function(player){
-         players[player.id] = player;
-         const delta = (Date.now() + clockDiff) - player.timestamp
-
-         // increment position due the current velocity
-         // and update the acceleration acordingly
-         player.x += player.vx * delta + (ACCEL * Math.pow(delta,2)/2)
-         player.y += player.vy * delta + (ACCEL * Math.pow(delta,2)/2)
-         const {inputs} = player;
-         if(inputs.LEFT_ARROW && !inputs.RIGHT_ARROW) {
-
-             player.x -= ACCEL * Math.pow(delta,2)/2;
-             player.vx -= ACCEL * delta;
-         }else if(!inputs.LEFT_ARROW && inputs.RIGHT_ARROW){
-                player.x += ACCEL * Math.pow(delta,2)/2;
-                player.vx += ACCEL * delta;
-         }
-
-         if(inputs.UP_ARROW && !inputs.DOWN_ARROW) {
-
-             player.y -= ACCEL * Math.pow(delta,2)/2;
-             player.vy -= ACCEL * delta;
-         }else if(!inputs.UP_ARROW && inputs.DOWN_ARROW){
-                player.y += ACCEL * Math.pow(delta,2)/2;
-                player.vy += ACCEL * delta;
-         }
-    },
-    userDisconnect: function(playerId){
-
-        delete players[playerId];
-        console.info(`The player ${playerId} has been disconnected`);
-        
-    },
-    "game:pong": function(serverNow){
-
-        ping = (Date.now() - lastPingTimestap) / 2;
-        clockDiff = Date.now() - serverNow+ping;
+    constructor () {
+        this.players = {}
     }
 
-    
-};
-
-
-
-function updateInputs () {
-    const { inputs } = myPlayer
-
-    for (let key in inputs) {
-        inputs[key] = kb.isKeyDown(kb[key])
+    onWorldInit (serverPlayers) {
+        this.players = serverPlayers
     }
-}
 
-function logic(delta){
+    onPlayerMoved (player) {
+        console.log(player)
+        this.players[player.id] = player
 
-    // JSON for two equal objects should be the same string
-    // const oldInputs = JSON.stringify(Object.assign({}, myPlayer.inputs))
-    const oldInputs = Object.assign({},  myPlayer.inputs)
-    updateInputs()
+        const delta = (Date.now() + clockDiff) - player.timestamp
 
-    const vInc = ACCEL * delta
-    for (let playerId in players) {
-        const player = players[playerId]
-        const { inputs } = player
-        
-        if (inputs.LEFT_ARROW) player.vx -= vInc
-        if (inputs.RIGHT_ARROW) player.vx += vInc
-        if (inputs.UP_ARROW) player.vy -= vInc
-        if (inputs.DOWN_ARROW) player.vy += vInc
-
-        let press = false;
-        for(let i in inputs){
-            
-            if(inputs[i]){ press = true;break;}
-        }
-
+            // increment position due to current velocity
+            // and update our velocity accordingly
         player.x += player.vx * delta
         player.y += player.vy * delta
-        
+
+        const { inputs } = player
+        if (inputs.LEFT_ARROW && !inputs.RIGHT_ARROW) {
+            player.x -= ACCEL * Math.pow(delta, 2) / 2
+            player.vx -= ACCEL * delta
+        } else if (!inputs.LEFT_ARROW && inputs.RIGHT_ARROW) {
+            player.x += ACCEL * Math.pow(delta, 2) / 2
+            player.vx += ACCEL * delta
+        }
+        if (inputs.UP_ARROW && !inputs.DOWN_ARROW) {
+            player.y -= ACCEL * Math.pow(delta, 2) / 2
+            player.vy -= ACCEL * delta
+        } else if (!inputs.UP_ARROW && inputs.DOWN_ARROW) {
+            player.y += ACCEL * Math.pow(delta, 2) / 2
+            player.vy += ACCEL * delta
+        }
     }
 
-    if (!deepEqual(myPlayer.inputs, oldInputs)) {
-        socket.emit('move', myPlayer)
+    onPlayerDisconnected (playerId) {
+        delete this.players[playerId]
     }
 
+    logic (delta) {
+        const vInc = ACCEL * delta
+        for (let playerId in this.players) {
+            const player = this.players[playerId]
+            const { inputs } = player
+            if (inputs.LEFT_ARROW) player.vx -= vInc
+            if (inputs.RIGHT_ARROW) player.vx += vInc
+            if (inputs.UP_ARROW) player.vy -= vInc
+            if (inputs.DOWN_ARROW) player.vy += vInc
+
+            player.x += player.vx * delta
+            player.y += player.vy * delta
+        }
+    }
 }
+
+function updateInputs () {
+    const oldInputs = Object.assign({}, myInputs)
+
+    for (let key in myInputs) {
+        myInputs[key] = kbd.isKeyDown(kbd[key])
+    }
+
+    if (!deepEqual(myInputs, oldInputs)) {
+        socket.emit('move', myInputs)
+
+        // update our local player' inputs so that we see instant change
+        // (inputs get taken into account in logic simulation)
+        const myPlayer = game.players[myPlayerId]
+        myPlayer.inputs = Object.assign({}, myInputs)
+    }
+}
+
+
+const game = new GameClient();
 
 const canvas = document.createElement("canvas");
 canvas.width = window.innerWidth;
@@ -139,17 +108,16 @@ canvas.height = window.innerHeight;
 document.body.appendChild(canvas);
 const ctx = canvas.getContext("2d");
 
-function render(){
-    ctx.fillStyle = 'white';
+function gameRenderer(game){
+    ctx.fillStyle = 'white'
     ctx.fillRect(0, 0, window.innerWidth, window.innerHeight)
 
-    for(let playerId in players){
-        const { color, x, y } = players[playerId];
-        ctx.fillStyle = color;
-        ctx.fillRect(x, y,50,50);
-
+    for (let playerId in game.players) {
+        const { color, x, y } = game.players[playerId]
+        ctx.fillStyle = color
+        ctx.fillRect(x, y, 50, 50)
         if (playerId === myPlayerId) {
-            ctx.strokeRect(x, y, 50, 50);
+            ctx.strokeRect(x, y, 50, 50)
         }
     }
 }
@@ -161,8 +129,9 @@ function gameLoop(){
     const now = Date.now();
     const delta = now - past
     past = now
-    logic(delta);
-    render();
+    updateInputs();
+    game.logic(delta);
+    gameRenderer(game);
 }
 
 
@@ -171,6 +140,28 @@ function startPingHandshake(){
     lastPingTimestap = Date.now();
     socket.emit('game:ping');
 }
+
+setInterval(startPingHandshake,250)
+
+
+var SocketController = {
+
+    "world:init": function (serverPlayers, myId) {
+        game.onWorldInit(serverPlayers)
+        myPlayerId = myId
+    },
+
+    playerMoved: game.onPlayerMoved.bind(game),
+    playerDisconnected: game.onPlayerDisconnected.bind(game),
+    
+    "game:pong": function(serverNow){
+
+        ping = (Date.now() - lastPingTimestap) / 2;
+        clockDiff = Date.now() - serverNow+ping;
+    }
+
+    
+};
 
 socket.on("connect", function(){
 
@@ -184,5 +175,5 @@ socket.on("connect", function(){
 });
 
 
-setInterval(startPingHandshake,250)
+
 requestAnimationFrame(gameLoop);

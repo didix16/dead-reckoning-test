@@ -7,12 +7,25 @@ const Renderable = require("./renderable");
  */
 class GameObject extends Renderable{
 
-    constructor(x = 0, y = 0, width = 0, height = 0){
+    /**
+     * @func constructor
+     * @param {integer} x - The initial X object coordinate position
+     * @param {integer} y - The initial X object coordinate position
+     * @param {integer} width - The width of the object
+     * @param {integer} height - The height of the object
+     * @param {integer} radius - The radius of the object
+     */
+    constructor(x = 0, y = 0, width = 0, height = 0, radius = 0){
         super();
         this.x = x;
         this.y = y;
         this.width = width;
         this.height = height;
+        this.radius = radius;
+        this.center = {
+            x: this.x + this.width /2,
+            y: this.y + this.height / 2
+        };
 
         //Initial speed at 0
         this.vx = 0;
@@ -58,24 +71,69 @@ class GameObject extends Renderable{
 
     /**
      * Set the width of this object
+     * @public
      * @param {integer} width - The new width of the object
      * @return {GameObject} - Return self instance for chaining
      */
     setWidth(width){
 
         this.width = width;
+        this.center.x = this.x + this.width /2;
         return this;
     }
 
     /**
      * Set the height of this object
+     * @public 
      * @param {integer} height - The new height of the object
      * @return {GameObject} - Return self instance for chaining
      */
     setHeight(height){
 
         this.height = height;
+        this.center.y = this.y + this.width /2;
         return this;
+    }
+
+    /**
+     * @public
+     * @return {PlainObject} - Return a plain object with x and y keys identifying the GameObject center coordinates
+     */
+    getCenter(){
+
+        return this.center;
+    }
+
+    /**
+     * @public 
+     * @return {integer} - Returns the self radius. This number will be > 0. If, means this GameObject is not propertly initialized
+     */
+    getRadius(){
+
+        return this.radius;
+    }
+
+    /**
+     * Check if this object collides with another
+     * @public
+     * @param {GameObject} object - The GameObject to check if this collide with it
+     * @return {boolean} - Return true if this GameObject collides with object, else return false
+     */
+    collidesWith(object){
+
+        //Just check the circular collision
+        let center = this.getCenter();
+        let oCenter = object.getCenter();
+
+
+        // Calc Manhattan distance: Check at google
+        let distX = Math.abs(center.x - oCenter.x);
+        let distY = Math.abs(center.y - oCenter.y);
+
+        let radiusSum = this.getRadius() + object.getRadius();
+
+        return ( radiusSum >= distX || radiusSum >=  distY);
+
     }
 
     /**

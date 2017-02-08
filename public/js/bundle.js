@@ -704,6 +704,35 @@ function updateInputs () {
     }
 }
 
+class GameClient {
+
+    constructor(){
+
+    }
+
+    onPlayerConnected(){
+
+    }
+
+    onPlayerMoved(){
+
+    }
+
+    onWorldInit(){
+
+    }
+
+    onPlayerDisconnected(){
+
+    }
+
+    logic(delta){
+
+    }
+}
+
+const game = new GameClient();
+
 function logic(delta){
 
     // JSON for two equal objects should be the same string
@@ -744,7 +773,7 @@ canvas.height = window.innerHeight;
 document.body.appendChild(canvas);
 const ctx = canvas.getContext("2d");
 
-function render(){
+function gameRenderer(game){
     ctx.fillStyle = 'white';
     ctx.fillRect(0, 0, window.innerWidth, window.innerHeight)
 
@@ -766,7 +795,9 @@ function gameLoop(){
     const now = Date.now();
     const delta = now - past
     past = now
-    logic(delta);
+    game.logic(delta);
+    gameRenderer(game);
+    //logic(delta);
     render();
 }
 
