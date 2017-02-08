@@ -172,654 +172,174 @@ function shim (obj) {
 }
 
 },{}],5:[function(require,module,exports){
-// randomColor by David Merfield under the CC0 license
-// https://github.com/davidmerfield/randomColor/
-
-;(function(root, factory) {
-
-  // Support AMD
-  if (typeof define === 'function' && define.amd) {
-    define([], factory);
-
-  // Support CommonJS
-  } else if (typeof exports === 'object') {
-    var randomColor = factory();
-
-    // Support NodeJS & Component, which allow module.exports to be a function
-    if (typeof module === 'object' && module && module.exports) {
-      exports = module.exports = randomColor;
-    }
-
-    // Support CommonJS 1.1.1 spec
-    exports.randomColor = randomColor;
-
-  // Support vanilla script loading
-  } else {
-    root.randomColor = factory();
-  }
-
-}(this, function() {
-
-  // Seed to get repeatable colors
-  var seed = null;
-
-  // Shared color dictionary
-  var colorDictionary = {};
-
-  // Populate the color dictionary
-  loadColorBounds();
-
-  var randomColor = function (options) {
-
-    options = options || {};
-
-    // Check if there is a seed and ensure it's an
-    // integer. Otherwise, reset the seed value.
-    if (options.seed && options.seed === parseInt(options.seed, 10)) {
-      seed = options.seed;
-
-    // A string was passed as a seed
-    } else if (typeof options.seed === 'string') {
-      seed = stringToInteger(options.seed);
-
-    // Something was passed as a seed but it wasn't an integer or string
-    } else if (options.seed !== undefined && options.seed !== null) {
-      throw new TypeError('The seed value must be an integer or string');
-
-    // No seed, reset the value outside.
-    } else {
-      seed = null;
-    }
-
-    var H,S,B;
-
-    // Check if we need to generate multiple colors
-    if (options.count !== null && options.count !== undefined) {
-
-      var totalColors = options.count,
-          colors = [];
-
-      options.count = null;
-
-      while (totalColors > colors.length) {
-
-        // Since we're generating multiple colors,
-        // incremement the seed. Otherwise we'd just
-        // generate the same color each time...
-        if (seed && options.seed) options.seed += 1;
-
-        colors.push(randomColor(options));
-      }
-
-      options.count = totalColors;
-
-      return colors;
-    }
-
-    // First we pick a hue (H)
-    H = pickHue(options);
-
-    // Then use H to determine saturation (S)
-    S = pickSaturation(H, options);
-
-    // Then use S and H to determine brightness (B).
-    B = pickBrightness(H, S, options);
-
-    // Then we return the HSB color in the desired format
-    return setFormat([H,S,B], options);
-  };
-
-  function pickHue (options) {
-
-    var hueRange = getHueRange(options.hue),
-        hue = randomWithin(hueRange);
-
-    // Instead of storing red as two seperate ranges,
-    // we group them, using negative numbers
-    if (hue < 0) {hue = 360 + hue;}
-
-    return hue;
-
-  }
-
-  function pickSaturation (hue, options) {
-
-    if (options.luminosity === 'random') {
-      return randomWithin([0,100]);
-    }
-
-    if (options.hue === 'monochrome') {
-      return 0;
-    }
-
-    var saturationRange = getSaturationRange(hue);
-
-    var sMin = saturationRange[0],
-        sMax = saturationRange[1];
-
-    switch (options.luminosity) {
-
-      case 'bright':
-        sMin = 55;
-        break;
-
-      case 'dark':
-        sMin = sMax - 10;
-        break;
-
-      case 'light':
-        sMax = 55;
-        break;
-   }
-
-    return randomWithin([sMin, sMax]);
-
-  }
-
-  function pickBrightness (H, S, options) {
-
-    var bMin = getMinimumBrightness(H, S),
-        bMax = 100;
-
-    switch (options.luminosity) {
-
-      case 'dark':
-        bMax = bMin + 20;
-        break;
-
-      case 'light':
-        bMin = (bMax + bMin)/2;
-        break;
-
-      case 'random':
-        bMin = 0;
-        bMax = 100;
-        break;
-    }
-
-    return randomWithin([bMin, bMax]);
-  }
-
-  function setFormat (hsv, options) {
-
-    switch (options.format) {
-
-      case 'hsvArray':
-        return hsv;
-
-      case 'hslArray':
-        return HSVtoHSL(hsv);
-
-      case 'hsl':
-        var hsl = HSVtoHSL(hsv);
-        return 'hsl('+hsl[0]+', '+hsl[1]+'%, '+hsl[2]+'%)';
-
-      case 'hsla':
-        var hslColor = HSVtoHSL(hsv);
-        return 'hsla('+hslColor[0]+', '+hslColor[1]+'%, '+hslColor[2]+'%, ' + Math.random() + ')';
-
-      case 'rgbArray':
-        return HSVtoRGB(hsv);
-
-      case 'rgb':
-        var rgb = HSVtoRGB(hsv);
-        return 'rgb(' + rgb.join(', ') + ')';
-
-      case 'rgba':
-        var rgbColor = HSVtoRGB(hsv);
-        return 'rgba(' + rgbColor.join(', ') + ', ' + Math.random() + ')';
-
-      default:
-        return HSVtoHex(hsv);
-    }
-
-  }
-
-  function getMinimumBrightness(H, S) {
-
-    var lowerBounds = getColorInfo(H).lowerBounds;
-
-    for (var i = 0; i < lowerBounds.length - 1; i++) {
-
-      var s1 = lowerBounds[i][0],
-          v1 = lowerBounds[i][1];
-
-      var s2 = lowerBounds[i+1][0],
-          v2 = lowerBounds[i+1][1];
-
-      if (S >= s1 && S <= s2) {
-
-         var m = (v2 - v1)/(s2 - s1),
-             b = v1 - m*s1;
-
-         return m*S + b;
-      }
-
-    }
-
-    return 0;
-  }
-
-  function getHueRange (colorInput) {
-
-    if (typeof parseInt(colorInput) === 'number') {
-
-      var number = parseInt(colorInput);
-
-      if (number < 360 && number > 0) {
-        return [number, number];
-      }
-
-    }
-
-    if (typeof colorInput === 'string') {
-
-      if (colorDictionary[colorInput]) {
-        var color = colorDictionary[colorInput];
-        if (color.hueRange) {return color.hueRange;}
-      }
-    }
-
-    return [0,360];
-
-  }
-
-  function getSaturationRange (hue) {
-    return getColorInfo(hue).saturationRange;
-  }
-
-  function getColorInfo (hue) {
-
-    // Maps red colors to make picking hue easier
-    if (hue >= 334 && hue <= 360) {
-      hue-= 360;
-    }
-
-    for (var colorName in colorDictionary) {
-       var color = colorDictionary[colorName];
-       if (color.hueRange &&
-           hue >= color.hueRange[0] &&
-           hue <= color.hueRange[1]) {
-          return colorDictionary[colorName];
-       }
-    } return 'Color not found';
-  }
-
-  function randomWithin (range) {
-    if (seed === null) {
-      return Math.floor(range[0] + Math.random()*(range[1] + 1 - range[0]));
-    } else {
-      //Seeded random algorithm from http://indiegamr.com/generate-repeatable-random-numbers-in-js/
-      var max = range[1] || 1;
-      var min = range[0] || 0;
-      seed = (seed * 9301 + 49297) % 233280;
-      var rnd = seed / 233280.0;
-      return Math.floor(min + rnd * (max - min));
-    }
-  }
-
-  function HSVtoHex (hsv){
-
-    var rgb = HSVtoRGB(hsv);
-
-    function componentToHex(c) {
-        var hex = c.toString(16);
-        return hex.length == 1 ? '0' + hex : hex;
-    }
-
-    var hex = '#' + componentToHex(rgb[0]) + componentToHex(rgb[1]) + componentToHex(rgb[2]);
-
-    return hex;
-
-  }
-
-  function defineColor (name, hueRange, lowerBounds) {
-
-    var sMin = lowerBounds[0][0],
-        sMax = lowerBounds[lowerBounds.length - 1][0],
-
-        bMin = lowerBounds[lowerBounds.length - 1][1],
-        bMax = lowerBounds[0][1];
-
-    colorDictionary[name] = {
-      hueRange: hueRange,
-      lowerBounds: lowerBounds,
-      saturationRange: [sMin, sMax],
-      brightnessRange: [bMin, bMax]
-    };
-
-  }
-
-  function loadColorBounds () {
-
-    defineColor(
-      'monochrome',
-      null,
-      [[0,0],[100,0]]
-    );
-
-    defineColor(
-      'red',
-      [-26,18],
-      [[20,100],[30,92],[40,89],[50,85],[60,78],[70,70],[80,60],[90,55],[100,50]]
-    );
-
-    defineColor(
-      'orange',
-      [19,46],
-      [[20,100],[30,93],[40,88],[50,86],[60,85],[70,70],[100,70]]
-    );
-
-    defineColor(
-      'yellow',
-      [47,62],
-      [[25,100],[40,94],[50,89],[60,86],[70,84],[80,82],[90,80],[100,75]]
-    );
-
-    defineColor(
-      'green',
-      [63,178],
-      [[30,100],[40,90],[50,85],[60,81],[70,74],[80,64],[90,50],[100,40]]
-    );
-
-    defineColor(
-      'blue',
-      [179, 257],
-      [[20,100],[30,86],[40,80],[50,74],[60,60],[70,52],[80,44],[90,39],[100,35]]
-    );
-
-    defineColor(
-      'purple',
-      [258, 282],
-      [[20,100],[30,87],[40,79],[50,70],[60,65],[70,59],[80,52],[90,45],[100,42]]
-    );
-
-    defineColor(
-      'pink',
-      [283, 334],
-      [[20,100],[30,90],[40,86],[60,84],[80,80],[90,75],[100,73]]
-    );
-
-  }
-
-  function HSVtoRGB (hsv) {
-
-    // this doesn't work for the values of 0 and 360
-    // here's the hacky fix
-    var h = hsv[0];
-    if (h === 0) {h = 1;}
-    if (h === 360) {h = 359;}
-
-    // Rebase the h,s,v values
-    h = h/360;
-    var s = hsv[1]/100,
-        v = hsv[2]/100;
-
-    var h_i = Math.floor(h*6),
-      f = h * 6 - h_i,
-      p = v * (1 - s),
-      q = v * (1 - f*s),
-      t = v * (1 - (1 - f)*s),
-      r = 256,
-      g = 256,
-      b = 256;
-
-    switch(h_i) {
-      case 0: r = v; g = t; b = p;  break;
-      case 1: r = q; g = v; b = p;  break;
-      case 2: r = p; g = v; b = t;  break;
-      case 3: r = p; g = q; b = v;  break;
-      case 4: r = t; g = p; b = v;  break;
-      case 5: r = v; g = p; b = q;  break;
-    }
-
-    var result = [Math.floor(r*255), Math.floor(g*255), Math.floor(b*255)];
-    return result;
-  }
-
-  function HSVtoHSL (hsv) {
-    var h = hsv[0],
-      s = hsv[1]/100,
-      v = hsv[2]/100,
-      k = (2-s)*v;
-
-    return [
-      h,
-      Math.round(s*v / (k<1 ? k : 2-k) * 10000) / 100,
-      k/2 * 100
-    ];
-  }
-
-  function stringToInteger (string) {
-    var total = 0
-    for (var i = 0; i !== string.length; i++) {
-      if (total >= Number.MAX_SAFE_INTEGER) break;
-      total += string.charCodeAt(i)
-    }
-    return total
-  }
-
-  return randomColor;
-}));
-
-},{}],6:[function(require,module,exports){
-const kb = require('@dasilvacontin/keyboard');
-const randomColor = require("randomcolor");
-const deepEqual = require("deep-equal");
-document.addEventListener("keydown",function(e){
-
-    e.preventDefault();
-});
-
-document.addEventListener("keyup",function(e){
-
-    e.preventDefault();
-});
-
-const socket = io();
-
-
-const myPlayer = {
-    x: 100,
-    y: 100,
-    vx: 0,
-    vy: 0,
-    inputs: {
-        LEFT_ARROW: false,
-        RIGHT_ARROW: false,
-        DOWN_ARROW: false,
-        UP_ARROW: false
-    },
-    color: randomColor()
-}; // LA referencia es constante pero el contenido cambia!
-let myPlayerId = null;
-
-//hash playeId => playerData
-let players = {};
-
-let lastPingTimestap;
-let clockDiff = 0;
-let ping = Infinity;
-const ACCEL = 1 / 1000;
-
-var SocketController = {
-
-    "world:init": function(serverPlayers, myId){
-
-        myPlayerId = myId;
-        myPlayer.id = myId;
-        players = serverPlayers;    
-        players[myId] = myPlayer;
-    },
-
-    playerMoved: function(player){
-         players[player.id] = player;
-         const delta = (Date.now() + clockDiff) - player.timestamp
-
-         // increment position due the current velocity
-         // and update the acceleration acordingly
-         player.x += player.vx * delta + (ACCEL * Math.pow(delta,2)/2)
-         player.y += player.vy * delta + (ACCEL * Math.pow(delta,2)/2)
-         const {inputs} = player;
-         if(inputs.LEFT_ARROW && !inputs.RIGHT_ARROW) {
-
-             player.x -= ACCEL * Math.pow(delta,2)/2;
-             player.vx -= ACCEL * delta;
-         }else if(!inputs.LEFT_ARROW && inputs.RIGHT_ARROW){
-                player.x += ACCEL * Math.pow(delta,2)/2;
-                player.vx += ACCEL * delta;
-         }
-
-         if(inputs.UP_ARROW && !inputs.DOWN_ARROW) {
-
-             player.y -= ACCEL * Math.pow(delta,2)/2;
-             player.vy -= ACCEL * delta;
-         }else if(!inputs.UP_ARROW && inputs.DOWN_ARROW){
-                player.y += ACCEL * Math.pow(delta,2)/2;
-                player.vy += ACCEL * delta;
-         }
-    },
-    userDisconnect: function(playerId){
-
-        delete players[playerId];
-        console.info(`The player ${playerId} has been disconnected`);
-        
-    },
-    "game:pong": function(serverNow){
-
-        ping = (Date.now() - lastPingTimestap) / 2;
-        clockDiff = Date.now() - serverNow+ping;
-    }
-
-    
-};
-
-
-
-function updateInputs () {
-    const { inputs } = myPlayer
-
-    for (let key in inputs) {
-        inputs[key] = kb.isKeyDown(kb[key])
-    }
+/* globals requestAnimationFrame, io */
+const kb = require('@dasilvacontin/keyboard')
+const deepEqual = require('deep-equal')
+document.addEventListener('keydown', function (e) {
+  e.preventDefault()
+})
+
+document.addEventListener('keyup', function (e) {
+  e.preventDefault()
+})
+
+const socket = io()
+
+let myPlayerId = null
+const myInputs = {
+  LEFT_ARROW: false,
+  RIGHT_ARROW: false,
+  UP_ARROW: false,
+  DOWN_ARROW: false
 }
+
+const ACCEL = 1 / 1000
 
 class GameClient {
 
-    constructor(){
+  constructor () {
+    this.players = {}
+  }
 
+  onWorldInit (serverPlayers) {
+    this.players = serverPlayers
+  }
+
+  onPlayerMoved (player) {
+    console.log(player)
+    this.players[player.id] = player
+
+    const delta = (Date.now() + clockDiff) - player.timestamp
+
+            // increment position due to current velocity
+            // and update our velocity accordingly
+    player.x += player.vx * delta
+    player.y += player.vy * delta
+
+    const { inputs } = player
+    if (inputs.LEFT_ARROW && !inputs.RIGHT_ARROW) {
+      player.x -= ACCEL * Math.pow(delta, 2) / 2
+      player.vx -= ACCEL * delta
+    } else if (!inputs.LEFT_ARROW && inputs.RIGHT_ARROW) {
+      player.x += ACCEL * Math.pow(delta, 2) / 2
+      player.vx += ACCEL * delta
     }
-
-    onPlayerConnected(){
-
+    if (inputs.UP_ARROW && !inputs.DOWN_ARROW) {
+      player.y -= ACCEL * Math.pow(delta, 2) / 2
+      player.vy -= ACCEL * delta
+    } else if (!inputs.UP_ARROW && inputs.DOWN_ARROW) {
+      player.y += ACCEL * Math.pow(delta, 2) / 2
+      player.vy += ACCEL * delta
     }
+  }
 
-    onPlayerMoved(){
+  onPlayerDisconnected (playerId) {
+    delete this.players[playerId]
+  }
 
-    }
-
-    onWorldInit(){
-
-    }
-
-    onPlayerDisconnected(){
-
-    }
-
-    logic(delta){
-
-    }
-}
-
-const game = new GameClient();
-
-function logic(delta){
-
-    // JSON for two equal objects should be the same string
-    // const oldInputs = JSON.stringify(Object.assign({}, myPlayer.inputs))
-    const oldInputs = Object.assign({},  myPlayer.inputs)
-    updateInputs()
-
+  logic (delta) {
     const vInc = ACCEL * delta
-    for (let playerId in players) {
-        const player = players[playerId]
-        const { inputs } = player
-        
-        if (inputs.LEFT_ARROW) player.vx -= vInc
-        if (inputs.RIGHT_ARROW) player.vx += vInc
-        if (inputs.UP_ARROW) player.vy -= vInc
-        if (inputs.DOWN_ARROW) player.vy += vInc
+    for (let playerId in this.players) {
+      const player = this.players[playerId]
+      const { inputs } = player
+      if (inputs.LEFT_ARROW) player.vx -= vInc
+      if (inputs.RIGHT_ARROW) player.vx += vInc
+      if (inputs.UP_ARROW) player.vy -= vInc
+      if (inputs.DOWN_ARROW) player.vy += vInc
 
-        let press = false;
-        for(let i in inputs){
-            
-            if(inputs[i]){ press = true;break;}
-        }
-
-        player.x += player.vx * delta
-        player.y += player.vy * delta
-        
+      player.x += player.vx * delta
+      player.y += player.vy * delta
     }
+  }
+}
 
-    if (!deepEqual(myPlayer.inputs, oldInputs)) {
-        socket.emit('move', myPlayer)
+function updateInputs () {
+  const oldInputs = Object.assign({}, myInputs)
+
+  for (let key in myInputs) {
+    myInputs[key] = kb.isKeyDown(kb[key])
+  }
+
+  if (!deepEqual(myInputs, oldInputs)) {
+    socket.emit('move', myInputs)
+
+        // update our local player' inputs so that we see instant change
+        // (inputs get taken into account in logic simulation)
+    const myPlayer = game.players[myPlayerId]
+    myPlayer.inputs = Object.assign({}, myInputs)
+  }
+}
+
+const game = new GameClient()
+
+const canvas = document.createElement('canvas')
+canvas.width = window.innerWidth
+canvas.height = window.innerHeight
+document.body.appendChild(canvas)
+const ctx = canvas.getContext('2d')
+
+function gameRenderer (game) {
+  ctx.fillStyle = 'white'
+  ctx.fillRect(0, 0, window.innerWidth, window.innerHeight)
+
+  for (let playerId in game.players) {
+    const { color, x, y } = game.players[playerId]
+    ctx.fillStyle = color
+    ctx.fillRect(x, y, 50, 50)
+    if (playerId === myPlayerId) {
+      ctx.strokeRect(x, y, 50, 50)
     }
+  }
+}
+
+let past = Date.now()
+function gameLoop () {
+  requestAnimationFrame(gameLoop)
+  const now = Date.now()
+  const delta = now - past
+  past = now
+  updateInputs()
+  game.logic(delta)
+  gameRenderer(game)
+}
+
+let lastPingTimestamp
+let clockDiff = 0 // how many ms the server is ahead from us
+let ping = Infinity
+
+function startPingHandshake () {
+  lastPingTimestamp = Date.now()
+  socket.emit('game:ping')
+}
+
+setInterval(startPingHandshake, 250)
+
+var SocketController = {
+
+  'world:init': function (serverPlayers, myId) {
+    game.onWorldInit(serverPlayers)
+    myPlayerId = myId
+  },
+
+  playerMoved: game.onPlayerMoved.bind(game),
+  playerDisconnected: game.onPlayerDisconnected.bind(game),
+
+  'game:pong': function (serverNow) {
+    ping = (Date.now() - lastPingTimestamp) / 2
+    clockDiff = Date.now() - serverNow + ping
+  }
 
 }
 
-const canvas = document.createElement("canvas");
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
-document.body.appendChild(canvas);
-const ctx = canvas.getContext("2d");
-
-function gameRenderer(game){
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, window.innerWidth, window.innerHeight)
-
-    for(let playerId in players){
-        const { color, x, y } = players[playerId];
-        ctx.fillStyle = color;
-        ctx.fillRect(x, y,50,50);
-
-        if (playerId === myPlayerId) {
-            ctx.strokeRect(x, y, 50, 50);
-        }
-    }
-}
-
-let past = Date.now();
-function gameLoop(){
-
-    requestAnimationFrame(gameLoop);
-    const now = Date.now();
-    const delta = now - past
-    past = now
-    game.logic(delta);
-    gameRenderer(game);
-    //logic(delta);
-    render();
-}
-
-
-function startPingHandshake(){
-
-    lastPingTimestap = Date.now();
-    socket.emit('game:ping');
-}
-
-socket.on("connect", function(){
-
+socket.on('connect', function () {
     // Register on handlers
-    for( let evnt in SocketController){
-
-        if(SocketController.hasOwnProperty(evnt)){
-            socket.on(evnt, SocketController[evnt]);
-        }
+  for (let evnt in SocketController) {
+    if (SocketController.hasOwnProperty(evnt)) {
+      socket.on(evnt, SocketController[evnt])
     }
-});
+  }
+})
 
+requestAnimationFrame(gameLoop)
 
-setInterval(startPingHandshake,250)
-requestAnimationFrame(gameLoop);
-},{"@dasilvacontin/keyboard":1,"deep-equal":2,"randomcolor":5}]},{},[6]);
+},{"@dasilvacontin/keyboard":1,"deep-equal":2}]},{},[5]);
