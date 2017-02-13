@@ -19,15 +19,6 @@ class Renderable {
     }
 
     this.gfx = Render
-    if(!globals.getGlobal("SERVER")){
-
-      this.layers = {
-        world: {},
-        camera: {},
-        objects:  {}
-      } // The layers to identify where the object, world or a camera must be added to be controlled
-
-    }
   }
 
    renderAll() {
