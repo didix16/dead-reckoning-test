@@ -6,9 +6,12 @@ const GameObject = require('./gameObject')
  */
 class Player extends GameObject {
 
-  constructor () {
-    super()
-  }
+    constructor(id,x,y,width,height,radius){
+        super(id,x,y,width,height,radius)
+        this.inputs = {}
+        this.color
+        this.timestamp = 0
+    }
 }
 
 module.exports = Player

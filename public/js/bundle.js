@@ -172,9 +172,104 @@ function shim (obj) {
 }
 
 },{}],5:[function(require,module,exports){
-/* globals requestAnimationFrame, io */
-const kb = require('@dasilvacontin/keyboard')
-const deepEqual = require('deep-equal')
+const GameObject = require('./gameObject')
+const Circle = require('./circle')
+class BaseProjectile extends GameObject
+{
+
+  constructor (o) {
+    super(o.id, o.x, o.y, o.width, o.height, o.radius)
+
+    this.owner = 0 // player id
+
+    this.body = new Circle(this.x, this.y, this.radius)
+    this.dammage = o.damage
+
+    this.isExplosive = false
+
+    this.direction = {
+      x: 0,
+      y: 0
+    }
+
+        /* this.speed = {
+            x: 0,
+            y: 0
+        }; */
+
+    this.speed = 0.0
+  }
+
+  getId () {
+    return this.id
+  };
+
+  setPosition (x, y) {
+    this.x = x
+    this.y = y
+
+    this.body.x = x
+    this.body.y = y
+
+    return this
+  };
+
+  hitsWith (posX, posY) {
+
+  };
+
+  destroy () {
+    delete this
+  };
+
+  render () {
+    this.body.render('#fff', true)
+    return this
+  }
+
+}
+
+module.exports = BaseProjectile
+
+},{"./circle":6,"./gameObject":10}],6:[function(require,module,exports){
+const Renderable = require('./renderable')
+class Circle extends Renderable
+{
+  constructor (x, y, r) {
+    super()
+    this.x = x
+    this.y = y
+    this.radius = r
+    this.scale = 1.0
+  }
+
+  setScale (s) {
+    this.scale = s
+    return this
+  };
+
+  render (color, fill) {
+    this.gfx.beginPath()
+    this.gfx.arc(this.x, this.y, this.radius * this.scale, 0, 2 * Math.PI)
+    this.gfx.strokeStyle = color
+    this.gfx.stroke()
+    if (fill) {
+      this.gfx.fillStyle = color
+      this.gfx.fill()
+    }
+  };
+}
+
+module.exports = Circle
+
+},{"./renderable":17}],7:[function(require,module,exports){
+/* globals io */
+
+// tool de test_ coverage && coverall
+// travis CI
+// Assertion library: Chai -> expect
+// Unexpected.js
+// dot-only-haunter
 document.addEventListener('keydown', function (e) {
   e.preventDefault()
 })
@@ -183,58 +278,178 @@ document.addEventListener('keyup', function (e) {
   e.preventDefault()
 })
 
-const socket = io()
+var globals = require('./globals')
+const canvas = document.createElement('canvas')
+canvas.width = window.innerWidth
+canvas.height = window.innerHeight
+document.body.appendChild(canvas)
 
-let myPlayerId = null
-const myInputs = {
-  LEFT_ARROW: false,
-  RIGHT_ARROW: false,
-  UP_ARROW: false,
-  DOWN_ARROW: false
+globals.addGlobal('canvas', canvas) // Make the canvas visible for all to render
+
+const GameClient = require('./gameClient')
+
+const socketIO = io
+
+const game = new GameClient({
+  io: socketIO,
+  camera: {
+    x: 0,
+    y: 0,
+    w: canvas.width,
+    h: canvas.height
+  }
+})
+
+window.game = game
+
+game.run()
+
+},{"./gameClient":9,"./globals":11}],8:[function(require,module,exports){
+const GameObject = require('./gameObject')
+const Render = require('./render')
+/**
+ * A camera that foucus the scene in some part of the game world
+ * @public
+ * @param {integer} x - GameCamera x coordinate position
+ * @param {integer} y - GameCamera y coordinate position
+ * @param {width} width - The width of the GameCamera
+ * @param {height} height - The height of the GameCamera
+ * @constructor {GameCamera} GameCamera
+ */
+class GameCamera extends GameObject {
+
+  constructor (id = -1, x, y, width, height) {
+    super(id, x, y, width, height)
+  }
+
+    /**
+     * Centers the camera to the object
+     * @function GameCamera.focusOn
+     * @param {GameObject} object - A GameObject to be focused on
+     * @return {GameCamera} - Return a self reference for chaining
+     */
+  focusOn (object) {
+    Render.gfx.save()
+    this.x = object.x - this.width / 2
+    this.y = object.y - this.height / 2
+
+    Render.gfx.translate(this.x, this.y)
+    Render.gfx.restore()
+    return this
+  }
 }
 
-const ACCEL = 1 / 1000
+module.exports = GameCamera
 
+},{"./gameObject":10,"./render":16}],9:[function(require,module,exports){
+/* globals requestAnimationFrame, window  */
+let Render = require('./render')
+let Tank = require('./tank')
+let GameCamera = require('./gameCamera')
+let globals = require('./globals')
+let Network = require('./net')
+const deepEqual = require('deep-equal')
+const kb = require('@dasilvacontin/keyboard')
+
+globals.addGlobal('ACCEL', 1 / 1000);
+let ACCEL = globals.getGlobal('ACCEL');
 class GameClient {
 
-  constructor () {
+  constructor (o) {
+    let $this = this // self reference
+    this.net = new Network(o.io,true)
     this.players = {}
-  }
-
-  onWorldInit (serverPlayers) {
-    this.players = serverPlayers
-  }
-
-  onPlayerMoved (player) {
-    console.log(player)
-    this.players[player.id] = player
-
-    const delta = (Date.now() + clockDiff) - player.timestamp
-
-            // increment position due to current velocity
-            // and update our velocity accordingly
-    player.x += player.vx * delta
-    player.y += player.vy * delta
-
-    const { inputs } = player
-    if (inputs.LEFT_ARROW && !inputs.RIGHT_ARROW) {
-      player.x -= ACCEL * Math.pow(delta, 2) / 2
-      player.vx -= ACCEL * delta
-    } else if (!inputs.LEFT_ARROW && inputs.RIGHT_ARROW) {
-      player.x += ACCEL * Math.pow(delta, 2) / 2
-      player.vx += ACCEL * delta
+    this.items = {}
+    this.projectiles = {}
+    this.lastLogic = 0
+    this.clockDiff
+    this.myPlayerId = null
+    this.myInputs = {
+      LEFT_ARROW: false,
+      RIGHT_ARROW: false,
+      UP_ARROW: false,
+      DOWN_ARROW: false
     }
-    if (inputs.UP_ARROW && !inputs.DOWN_ARROW) {
-      player.y -= ACCEL * Math.pow(delta, 2) / 2
-      player.vy -= ACCEL * delta
-    } else if (!inputs.UP_ARROW && inputs.DOWN_ARROW) {
-      player.y += ACCEL * Math.pow(delta, 2) / 2
-      player.vy += ACCEL * delta
-    }
-  }
 
-  onPlayerDisconnected (playerId) {
-    delete this.players[playerId]
+    this.gfx = Render
+
+    this.camera = new GameCamera(-1, o.camera.x, o.camera.y, o.camera.w, o.camera.h)
+
+    this.events = {
+      onWorldInit (data) {
+        console.log('INCOMING_DATA',data)
+        var playerIds = Object.keys(data.serverPlayers)
+        let players = {}
+
+        // Instantiate a Tank class by plain object
+        playerIds.forEach(function (playerId) {
+          players[playerId] = new Tank(data.serverPlayers[playerId])
+        })
+        $this.players = players
+
+        $this.items = data.serverItems
+        $this.projectiles = data.serverProjectiles
+        $this.myPlayerId = data.myId
+      },
+
+      onPlayerMoved (player) {
+        console.log(player)
+        $this.players[player.id] = new Tank(player);
+
+        const delta = ($this.lastLogic + $this.clockDiff) - player.timestamp
+
+                // increment position due to current velocity
+                // and update our velocity accordingly
+        player.x += player.vx * delta
+        player.y += player.vy * delta
+
+        const { inputs } = player
+        if (inputs.LEFT_ARROW && !inputs.RIGHT_ARROW) {
+          player.x -= ACCEL * Math.pow(delta, 2) / 2
+          player.vx -= ACCEL * delta
+        } else if (!inputs.LEFT_ARROW && inputs.RIGHT_ARROW) {
+          player.x += ACCEL * Math.pow(delta, 2) / 2
+          player.vx += ACCEL * delta
+        }
+        if (inputs.UP_ARROW && !inputs.DOWN_ARROW) {
+          player.y -= ACCEL * Math.pow(delta, 2) / 2
+          player.vy -= ACCEL * delta
+        } else if (!inputs.UP_ARROW && inputs.DOWN_ARROW) {
+          player.y += ACCEL * Math.pow(delta, 2) / 2
+          player.vy += ACCEL * delta
+        }
+      },
+
+      onItemSpawned (item) {
+        $this.items[item.id] = item
+      },
+
+      onItemCollected (playerId, itemId) {
+        delete $this.items[itemId]
+        // const player = $this.players[playerId]
+        // Do the item effect
+        // player.score++
+      },
+
+      onPlayerDisconnected (playerId) {
+        delete $this.players[playerId]
+      }
+    }
+    
+    this.netEvents = {
+      'world:init': $this.events.onWorldInit.bind($this),
+      playerMoved: $this.events.onPlayerMoved.bind($this),
+      playerDisconnected: $this.events.onPlayerDisconnected.bind($this),
+      coinSpawned: $this.events.onItemSpawned.bind($this),
+      coinCollected: $this.events.onItemCollected.bind($this),
+
+      'game:pong': function (serverNow) {
+        $this.net.ping = (Date.now() - $this.net.lastPingTimestamp) / 2
+        $this.clockDiff = Date.now() - serverNow + $this.net.ping
+      }
+    }
+
+    this.net.registerNetEvents(this.netEvents).init().send('gameJoin',{});
   }
 
   logic (delta) {
@@ -251,95 +466,990 @@ class GameClient {
       player.y += player.vy * delta
     }
   }
-}
 
-function updateInputs () {
-  const oldInputs = Object.assign({}, myInputs)
+  gameRenderer () {
+    this.gfx.fillStyle = 'white'
+    this.gfx.fillRect(0, 0, window.innerWidth, window.innerHeight)
 
-  for (let key in myInputs) {
-    myInputs[key] = kb.isKeyDown(kb[key])
-  }
+    // Iterate over items
 
-  if (!deepEqual(myInputs, oldInputs)) {
-    socket.emit('move', myInputs)
+    for (let itemId in this.items) {
+      let item = this.projectiles[itemId]
+      item.render()
+    }
 
-        // update our local player' inputs so that we see instant change
-        // (inputs get taken into account in logic simulation)
-    const myPlayer = game.players[myPlayerId]
-    myPlayer.inputs = Object.assign({}, myInputs)
-  }
-}
+    // Iterate over projectiles
 
-const game = new GameClient()
+    for (let projectileId in this.projectiles) {
+      let projectile = this.projectiles[projectileId]
+      projectile.render()
+    }
 
-const canvas = document.createElement('canvas')
-canvas.width = window.innerWidth
-canvas.height = window.innerHeight
-document.body.appendChild(canvas)
-const ctx = canvas.getContext('2d')
+    for (let playerId in this.players) {
+      const player = this.players[playerId]
+      // this.gfx.save()
+      // this.gfx.translate(player.x, player.y)
 
-function gameRenderer (game) {
-  ctx.fillStyle = 'white'
-  ctx.fillRect(0, 0, window.innerWidth, window.innerHeight)
+      player.render()
+      // his.gfx.fillStyle = player.color
+      // const HALF_EDGE = PLAYER_EDGE / 2
+      // this.gfx.fillRect(-HALF_EDGE, -HALF_EDGE, PLAYER_EDGE, PLAYER_EDGE)
+      // this.gfx.fillRect(x - HALF_EDGE, y - HALF_EDGE, PLAYER_EDGE, PLAYER_EDGE)
+      /* if (playerId === this.myPlayerId) {
+        this.gfx.strokeRect(-HALF_EDGE, -HALF_EDGE, PLAYER_EDGE, PLAYER_EDGE)
+      } */
 
-  for (let playerId in game.players) {
-    const { color, x, y } = game.players[playerId]
-    ctx.fillStyle = color
-    ctx.fillRect(x, y, 50, 50)
-    if (playerId === myPlayerId) {
-      ctx.strokeRect(x, y, 50, 50)
+      /* this.gfx.fillStyle = 'white'
+      this.gfx.textAlign = 'center'
+      this.gfx.font = '20px Arial'
+      this.gfx.fillText(score, 0, 7)
+      this.gfx.restore() */
+    }
+
+    // Render my pos
+    let myPlayer = this.players[this.myPlayerId];
+    if(myPlayer){
+      Render.save();
+      Render.font = '12px arial';
+      Render.strokeStyle = "black";
+      Render.strokeText("Pos: ("+parseInt(myPlayer.x)+","+parseInt(myPlayer.y)+")",30,20);
+      Render.fillStyle = "white";
+      Render.fillText("Pos: ("+parseInt(myPlayer.x)+","+parseInt(myPlayer.y)+")",30,20);
+      
+      Render.restore();
     }
   }
+
+  updateInputs () {
+    const oldInputs = Object.assign({}, this.myInputs)
+
+    for (let key in this.myInputs) {
+      this.myInputs[key] = kb.isKeyDown(kb[key])
+    }
+
+    if (!deepEqual(this.myInputs, oldInputs)) {
+      this.net.send('move', this.myInputs)
+
+      // update our local player' inputs aproximately when the server
+      // takes them into account
+      const frozenInputs = Object.assign({}, this.myInputs)
+      setTimeout(function () {
+        const myPlayer = this.players[this.myPlayerId]
+        myPlayer.inputs = frozenInputs
+      }.bind(this), this.net.ping)
+    }
+  }
+
+  gameLoop () {
+    requestAnimationFrame(this.gameLoop.bind(this));
+    const now = Date.now()
+    const delta = now - this.lastLogic
+    this.lastLogic = now
+    this.updateInputs()
+    this.logic(delta)
+    this.gameRenderer()
+  }
+
+  run () {
+    requestAnimationFrame(this.gameLoop.bind(this))
+  }
+
 }
 
-let past = Date.now()
-function gameLoop () {
-  requestAnimationFrame(gameLoop)
-  const now = Date.now()
-  const delta = now - past
-  past = now
-  updateInputs()
-  game.logic(delta)
-  gameRenderer(game)
+module.exports = GameClient
+
+},{"./gameCamera":8,"./globals":11,"./net":12,"./render":16,"./tank":19,"@dasilvacontin/keyboard":1,"deep-equal":2}],10:[function(require,module,exports){
+const Renderable = require('./renderable')
+/**
+ * Represents a in-game object in 2D. Has a x,y width and height
+ * @public
+ * @constructor {GameObject} GameObject
+ * @class {GameObject} GameObject
+ */
+class GameObject extends Renderable {
+
+    /**
+     * @func constructor
+     * @param {integer} id - The unique identifier of this GameObject
+     * @param {integer} x - The initial X object coordinate position
+     * @param {integer} y - The initial X object coordinate position
+     * @param {integer} width - The width of the object
+     * @param {integer} height - The height of the object
+     * @param {integer} radius - The radius of the object
+     */
+  constructor (id = 0, x = 0, y = 0, width = 0, height = 0, radius = 0) {
+    super()
+    this.id = id
+    this.x = x
+    this.y = y
+    this.width = width
+    this.height = height
+    this.radius = radius
+    this.center = {
+      x: this.x + this.width / 2,
+      y: this.y + this.height / 2
+    }
+
+        // Initial speed at 0
+    this.vx = 0
+    this.vy = 0
+  }
+
+    /**
+     * Set the position of the object in the world
+     * @public
+     * @param {integer} x - The new X coordinate
+     * @param {integer} y - The new Y coordinate
+     * @return {GameObject} - Return self instance for chaining
+     */
+  setPosition (x, y) {
+    this.x = x
+    this.y = y
+    return this
+  }
+
+    /**
+     * Set the speed of the object in the world
+     * @public
+     * @param {double} sx - Speed X value
+     * @param {double} sy - Speed Y value
+     * @return {GameObject} - Return self instance for chaining
+     */
+  setSpeed (sx, sy) {
+    this.vx = sx
+    this.vy = sy
+    return this
+  }
+
+    /**
+     * Get the current position of the object in the world
+     * @public
+     * @return {PlainObject} - A plain object with x and y keys identifying the object position
+     */
+  getPosition () {
+    return {x: this.x, y: this.y}
+  }
+
+    /**
+     * Set the width of this object
+     * @public
+     * @param {integer} width - The new width of the object
+     * @return {GameObject} - Return self instance for chaining
+     */
+  setWidth (width) {
+    this.width = width
+    this.center.x = this.x + this.width / 2
+    return this
+  }
+
+    /**
+     * Set the height of this object
+     * @public
+     * @param {integer} height - The new height of the object
+     * @return {GameObject} - Return self instance for chaining
+     */
+  setHeight (height) {
+    this.height = height
+    this.center.y = this.y + this.width / 2
+    return this
+  }
+
+    /**
+     * @public
+     * @return {PlainObject} - Return a plain object with x and y keys identifying the GameObject center coordinates
+     */
+  getCenter () {
+    return this.center
+  }
+
+    /**
+     * @public
+     * @return {integer} - Returns the self radius. This number will be > 0. If, means this GameObject is not propertly initialized
+     */
+  getRadius () {
+    return this.radius
+  }
+
+    /**
+     * Check if this object collides with another
+     * @public
+     * @param {GameObject} object - The GameObject to check if this collide with it
+     * @return {boolean} - Return true if this GameObject collides with object, else return false
+     */
+  collidesWith (object) {
+        // Just check the circular collision
+    let center = this.getCenter()
+    let oCenter = object.getCenter()
+
+        // Calc Manhattan distance: Check at google
+    let distX = Math.abs(center.x - oCenter.x)
+    let distY = Math.abs(center.y - oCenter.y)
+
+    let radiusSum = this.getRadius() + object.getRadius()
+
+    return (radiusSum >= distX || radiusSum >= distY)
+  }
+
+    /**
+     * A method that each GameObject must be implemented for self rendering in the GameWorld
+     * @public
+     * @return {GameObject} - Return self instance for chaining
+     */
+  render () {
+    return this
+  }
 }
 
-let lastPingTimestamp
-let clockDiff = 0 // how many ms the server is ahead from us
-let ping = Infinity
+module.exports = GameObject
 
-function startPingHandshake () {
-  lastPingTimestamp = Date.now()
-  socket.emit('game:ping')
-}
+},{"./renderable":17}],11:[function(require,module,exports){
+let globals = {
 
-setInterval(startPingHandshake, 250)
+  vars: {},
+  consts: {
 
-var SocketController = {
-
-  'world:init': function (serverPlayers, myId) {
-    game.onWorldInit(serverPlayers)
-    myPlayerId = myId
+  },
+    /**
+     * Adds a global var to be accesible form anywhere
+     * @param {String} key
+     * @param {any} value
+     * @return {PlainObject} - Returns global object for chaining
+    */
+  addGlobal (key, value) {
+    this.vars[key] = value
+    return this
   },
 
-  playerMoved: game.onPlayerMoved.bind(game),
-  playerDisconnected: game.onPlayerDisconnected.bind(game),
+    /**
+     * The value of the global with specific key
+     * @param {String} key
+     * @returns The value of the global with specific key
+     */
+  getGlobal (key) {
+    return this.vars[key]
+  },
 
-  'game:pong': function (serverNow) {
-    ping = (Date.now() - lastPingTimestamp) / 2
-    clockDiff = Date.now() - serverNow + ping
+    /**
+     * The value of a CONSTANT global with specific constKey
+     * @param {String} constKey
+     * @returns The value of the CONSTANT global with specific constKey
+     */
+  getConstant (constKey) {
+    return this.consts[constKey]
+  }
+}
+
+module.exports = globals
+
+},{}],12:[function(require,module,exports){
+// Dead reckoning - Algorithm
+
+// Rocket legue -> Simulation + Redo
+
+// timestamp actual, posicion (x,y), velocidad (vx, vy) e input jugador
+
+// Simular lag con setTimeout
+class Network {
+
+  constructor (socketIO,isClient=false) {
+    this.ping = 0
+    this.isClient = isClient // If false => Server else Client
+    this.io = !isClient ? socketIO : null
+    this.socket = isClient ? socketIO : null
+    this.id = isClient ? this.socket.id : null
+    this.lastPingTimestamp = 0
+    this.PING_HANDSHAKE_INTERVAL = 250
+    this.clients = !isClient ? {} : null;
+    this.events = {};
+  }
+
+  registerNetEvents(oEvents){
+
+    this.events = oEvents;
+    return this;
+  }
+
+  setPing (p) {
+    this.ping = p
+    return this
+  }
+
+  getPing () {
+    return this.ping
+  }
+
+  // Register new event to all clients (if we are server) or to us (if we are a client)
+  listen (evnt, callback) {
+
+    if(this.isClient){
+
+      this.socket.on(evnt, callback);
+    }else{
+      for(let c in this.clients){
+
+        this.clients[c].on(evnt, callback);
+      }
+    }
+
+    return this
+  }
+
+  send (evnt, objectData) {
+    if(this.isClient){
+      this.socket.emit(evnt, objectData)
+    }else{
+
+      this.broadcast(evnt,objectData)
+    }
+    return this
+  }
+
+  // Like send but server broadcast to all
+  broadcast(evnt,objectData){
+
+    this.io.sockets.emit(evnt,objectData)
+    return this
+  }
+
+  getId () {
+    return this.id
+  }
+
+  init(){
+
+    let $s = this.io;
+    let $self = this;
+    if(this.isClient){
+
+      // Init socketIO
+      this.socket = this.socket()
+      $s = this.socket
+    }
+    $s.on("connect",function($socket){
+
+      if(!$self.isClient){
+        console.log('A client has connected with ID: '+$socket.id);
+        $self.clients[$socket.id] = $socket;
+
+        // Register the server network events
+        for(let ev in $self.events){
+
+          if($self.events.hasOwnProperty(ev)){
+
+            $socket.on(ev,$self.events[ev]);
+          }
+        }
+      }else{
+        // Register the client network events
+        console.info('We have connected to the server successfully!')
+        for(let ev in $self.events){
+
+          if($self.events.hasOwnProperty(ev)){
+
+            $s.on(ev,$self.events[ev]);
+          }
+        }
+      }
+        
+
+    })
+
+    return this
+  }
+
+  startPingHandshake (pingEvnt) {
+    this.lastPingTimestamp = Date.now()
+    this.socket.emit(pingEvnt)
+
+    setInterval(this.pingHandshake.bind(this, pingEvnt), this.PING_HANDSHAKE_INTERVAL)
+  }
+
+  pingHandshake (pingEvnt) {
+    this.lastPingTimestamp = Date.now()
+    this.socket.emit(pingEvnt)
   }
 
 }
 
-socket.on('connect', function () {
-    // Register on handlers
-  for (let evnt in SocketController) {
-    if (SocketController.hasOwnProperty(evnt)) {
-      socket.on(evnt, SocketController[evnt])
+module.exports = Network
+
+},{}],13:[function(require,module,exports){
+const GameObject = require('./gameObject')
+
+/**
+ * Represents a player of the game
+ * @public
+ */
+class Player extends GameObject {
+
+    constructor(id,x,y,width,height,radius){
+        super(id,x,y,width,height,radius)
+        this.inputs = {}
+        this.color
+        this.timestamp = 0
     }
+}
+
+module.exports = Player
+
+},{"./gameObject":10}],14:[function(require,module,exports){
+const Renderable = require('./renderable')
+class Point extends Renderable
+{
+  constructor (_x, _y) {
+    super()
+    this.x = _x
+    this.y = _y
   }
-})
 
-requestAnimationFrame(gameLoop)
+  render (size, color) {
+    this.gfx.beginPath()
+    this.gfx.arc(this.x, this.y, size, 0, 2 * Math.PI, true)
+    this.gfx.fillStyle = color
+    this.gfx.fill()
+    this.gfx.strokeStyle = color
+    this.gfx.stroke()
+  };
+};
 
-},{"@dasilvacontin/keyboard":1,"deep-equal":2}]},{},[5]);
+module.exports = Point
+
+},{"./renderable":17}],15:[function(require,module,exports){
+const Point = require('./point')
+const Renderable = require('./renderable')
+class Rectangle extends Renderable {
+  constructor (x, y, width, height) {
+    super()
+    this.x = x
+    this.y = y
+    this.width = width
+    this.height = height
+  }
+
+  render (color, fill) {
+    this.gfx.save()
+    
+    //let POS_W = - this.width/2
+    //let POS_H = - 3/2*this.height
+//this.gfx.translate(POS_W,POS_H);
+    this.gfx.beginPath()
+    this.gfx.rect(this.x, this.y, this.width, this.height)
+    this.gfx.strokeStyle = color
+    this.gfx.stroke()
+    if (fill) {
+      this.gfx.fillStyle = color
+      this.gfx.fillRect(this.x, this.y, this.width, this.height)
+    }
+    this.gfx.restore()
+  }
+
+  rectInside (rect) {
+    if (this.x < rect.x + rect.width && this.x + this.width > rect.x &&
+        this.y < rect.y + rect.height && this.y + this.height > rect.y) {
+      return true
+    }
+    return false
+  }
+
+  pointInside (px, py) {
+    if (arguments.length === 1) {
+      var pt = new Point(px.x, px.y)
+      px = pt.x
+      py = pt.y
+    }
+    if (px >= this.x && px <= this.x + this.width) {
+      if (py >= this.y && py <= this.y + this.height) {
+        return true
+      }
+    }
+    return false
+  }
+
+  rotate (radians) {
+    this.gfx.save()
+    let POS_W = - this.width/2
+    let POS_H = - 3/2*this.height
+    this.gfx.translate(POS_W,POS_H);
+    this.gfx.translate(this.x + this.width / 2, this.y + this.height / 2)
+    this.gfx.rotate(radians)
+    this.gfx.translate(-this.x - this.width / 2, -this.y + this.height / 2)
+    
+    this.render('#f00')
+    this.gfx.restore()
+    return this
+  };
+
+}
+
+module.exports = Rectangle
+
+},{"./point":14,"./renderable":17}],16:[function(require,module,exports){
+let globals = require('./globals');
+class Render {
+
+    /**
+     * Creates an instance of Render.
+     *
+     * @param {CanvasRenderingContext2D} canvasContext
+     *
+     * @memberOf Render
+     */
+  constructor (canvasContext) {
+    this.gfx = canvasContext
+  }
+}
+
+console.log("GLOBALS_OBJ: ",globals);
+let render = null;
+if(!globals.getGlobal("SERVER")){
+  render = new Render(globals.getGlobal('canvas').getContext('2d'))
+  module.exports = render.gfx
+}else{
+  module.exports = null
+}
+},{"./globals":11}],17:[function(require,module,exports){
+const Render = require('./render') // Instance of GFX
+/**
+ * A class that makes an object to be drawn with render method and some other functions.
+ * @class Renderable
+ */
+class Renderable {
+
+  /**
+   * Creates an instance of Renderable.
+   * @memberOf Renderable
+   */
+  constructor () {
+    if (new.target === Renderable) {
+      throw new TypeError('Cannot construct interface instance directly!')
+    }
+    if (this.render === undefined) {
+      throw new TypeError('This class must implement the render method')
+    }
+
+    this.gfx = Render
+  }
+}
+
+module.exports = Renderable
+
+
+},{"./render":16}],18:[function(require,module,exports){
+/* globals window */
+const globals = require("./globals");
+
+if(!globals.getGlobal("SERVER")){
+  window.int_x = 0
+  window.int_y = 0
+}
+
+
+var DONT_INTERSECT = 0
+var COLLINEAR = 1
+var DO_INTERSECT = 2
+
+const Vector = require('./vector')
+const Point = require('./point')
+
+function sameSign (a, b) { return ((a * b) >= 0) }
+
+const Renderable = require('./renderable')
+class Segment extends Renderable
+{
+  constructor (x, y, vecx, vecy, width) {
+    super()
+    this.x = x
+    this.y = y
+    this.vecx = vecx
+    this.vecy = vecy
+    this.width = width
+  }
+
+  render (width, color) {
+    this.gfx.save()
+    let POS_W = - this.vecx/2
+    let POS_H = - this.vecy/2
+    this.gfx.translate(POS_W,POS_H);
+    this.gfx.beginPath()
+    this.gfx.lineWidth = width !== undefined && width !== null ? width : this.width
+    this.gfx.moveTo(this.x, this.y)
+    this.gfx.lineTo(this.x + this.vecx, this.y + this.vecy)
+    this.gfx.strokeStyle = color
+    this.gfx.stroke()
+    this.gfx.closePath()
+    this.gfx.restore()
+  };
+
+  rotate (radians) {
+    var X = this.vecx * Math.cos(radians) - this.vecy * Math.sin(radians)
+    var Y = this.vecy * Math.cos(radians) + this.vecx * Math.sin(radians)
+
+    this.vecx = X
+    this.vecy = Y
+    return this
+  };
+
+  length () {
+    var dx = this.vecx
+    var dy = this.vecy
+    return Math.sqrt(dx * dx + dy * dy)
+  }
+
+  normal () {
+    var x1 = this.y
+    var y1 = this.x + this.vecx
+    var y2 = this.x
+    var x2 = this.y + this.vecy
+    return new Segment(x1, y1, x2 - x1, y2 - y1)
+  }
+
+  center () {
+    var _x = this.x + this.x + this.vecx
+    var _y = this.y + this.y + this.vecy
+    _x /= 2
+    _y /= 2
+    return new Point(_x, _y)
+  }
+
+  unit () {
+    return new Segment(0, 0, this.vecx / this.length(), this.vecy / this.length())
+  }
+
+  multiply (multiplier) {
+    return new Segment(0, 0, this.vecx * multiplier, this.vecy * multiplier)
+  }
+
+  project (segOnto) {
+    var vec = new Vector(this.vecx, this.vecy)
+    var onto = new Vector(segOnto.vecx, segOnto.vecy)
+    var d = onto.dot(onto)
+    if (d > 0) {
+      var dp = vec.dot(onto)
+      var multiplier = dp / d
+      var rx = onto.x * multiplier
+      var ry = onto.y * multiplier
+      return new Point(rx, ry)
+    }
+    return new Point(0, 0)
+  }
+
+  intersect (segment) {
+      // a
+    var x1 = this.x
+    var y1 = this.y
+    var x2 = this.x + this.vecx
+    var y2 = this.y + this.vecy
+
+          // b
+    var x3 = segment.x
+    var y3 = segment.y
+    var x4 = segment.x + segment.vecx
+    var y4 = segment.y + segment.vecy
+
+    var a1, a2, b1, b2, c1, c2
+    var r1, r2, r3, r4
+    var denom, offset, num
+
+    a1 = y2 - y1
+    b1 = x1 - x2
+    c1 = (x2 * y1) - (x1 * y2)
+
+    r3 = ((a1 * x3) + (b1 * y3) + c1)
+    r4 = ((a1 * x4) + (b1 * y4) + c1)
+
+    if ((r3 !== 0) && (r4 !== 0) && sameSign(r3, r4)) {
+      return DONT_INTERSECT
+    }
+
+    a2 = y4 - y3 // Compute a2, b2, c2
+    b2 = x3 - x4
+    c2 = (x4 * y3) - (x3 * y4)
+    r1 = (a2 * x1) + (b2 * y1) + c2 // Compute r1 and r2
+    r2 = (a2 * x2) + (b2 * y2) + c2
+
+    if ((r1 !== 0) && (r2 !== 0) && (sameSign(r1, r2))) {
+      return DONT_INTERSECT
+    }
+
+    denom = (a1 * b2) - (a2 * b1) // Line segments intersect: compute intersection point.
+
+    if (denom === 0) {
+      return COLLINEAR
+    }
+
+    if (denom < 0) offset = -denom / 2; else offset = denom / 2
+
+    num = (b1 * c2) - (b2 * c1)
+    if (num < 0) window.int_x = (num - offset) / denom; else window.int_x = (num + offset) / denom
+
+    num = (a2 * c1) - (a1 * c2)
+    if (num < 0) window.int_y = (num - offset) / denom; else window.int_y = (num + offset) / denom
+
+    return DO_INTERSECT
+  }
+
+}
+
+module.exports = Segment
+
+},{"./globals":11,"./point":14,"./renderable":17,"./vector":21}],19:[function(require,module,exports){
+const utils = require('./utils')
+const Player = require('./player')
+const Segment = require('./segment')
+const Rectangle = require('./rectangle')
+const BaseProjectile = require('./baseProjectile')
+
+class Tank extends Player
+{
+  constructor (o) {
+    super(o.id, o.x, o.y, o.width, o.height, o.radius)
+
+    this.health = o.health ? o.health : 100
+    this.maxHealth = o.maxHealth ? o.maxHealth : 100
+    this.died = false
+
+    this.healthBarOffset = 20
+    this.healthBar = new Segment(this.x, this.y - this.healthBarOffset, 40, 0, 5)
+    this.maxHealthBarX = this.healthBar.vecx + 2
+
+        // Unit director vector and shortcut degrees
+    this.orientation = {
+      x: 1,
+      y: 0,
+      degree: 0
+    }
+
+    this.body = new Rectangle(this.x, this.y, this.width, this.height)
+    this.turret = {
+      base: new Rectangle(this.x + this.width / 4, this.y + this.height / 4, this.width / 2, this.height / 2),
+      canon: new Segment(this.x + this.width / 2, this.y + this.height / 2, 40, 0, 3),
+      orientation: 0 // In degrees
+    }
+
+        // Speed X
+    this.sx = 0
+        // Speed y
+    this.sy = 0
+
+    this.speed = 20 // Default speed
+  }
+
+  getId () {
+    return this.id
+  };
+
+  setSpeed (speed) {
+    this.speed = speed
+  };
+
+  getSpeed () {
+    return this.speed
+  };
+
+  setPosition (x, y) {
+    this.x = x
+    this.y = y
+
+    this.body.x = x
+    this.body.y = y
+
+    this.turret.base.x = this.x + this.width / 4
+    this.turret.base.y = this.y + this.height / 4
+
+    this.turret.canon.x = this.x + this.width / 2
+    this.turret.canon.y = this.y + this.height / 2
+
+    return this
+  };
+
+   // Rotate the body of the tank
+  rotate (degrees) {
+    var rad = utils.degreeToRadian(degrees)
+    var X = this.orientation.x * Math.cos(rad) - this.orientation.y * Math.sin(rad)
+    var Y = this.orientation.y * Math.cos(rad) + this.orientation.x * Math.sin(rad)
+
+    this.orientation.x = X
+    this.orientation.y = Y
+    this.orientation.degree += degrees
+    this.orientation.degree %= 360
+    return this
+  };
+
+   // Just move forward into orientation direction
+  move (distance) {
+    this.x += this.orientation.x * distance
+    this.y += this.orientation.y * distance
+
+    this.body.x = this.x
+    this.turret.base.x = this.x + this.width / 4
+    this.turret.canon.x = this.x + this.width / 2
+
+    this.healthBar.x = this.x
+
+    this.body.y = this.y
+
+    this.turret.base.y = this.y + this.width / 4
+    this.turret.canon.y = this.y + this.width / 2
+
+    this.healthBar.y = this.y - this.healthBarOffset
+
+    return this
+  };
+
+  rotateTurret (degrees) {
+    this.turret.orientation += degrees
+    this.turret.orientation %= 360
+    this.turret.canon.rotate(utils.degreeToRadian(degrees))
+
+    return this
+  };
+
+  shoot (strenght) {
+    strenght = strenght !== undefined ? strenght : 1.0
+    var p = new BaseProjectile({
+
+      id: this.id,
+      x: this.turret.canon.x + this.turret.canon.vecx,
+      y: this.turret.canon.y + this.turret.canon.vecy,
+      owner: this.owner,
+      width: this.turret.canon.width,
+      height: this.turret.canon.width,
+      radius: this.turret.canon.width,
+      damage: 20,
+      speed: strenght
+
+    })
+
+    p.isExplosive = true
+    var s = this.turret.canon.unit()
+    p.direction = {
+      x: s.vecx,
+      y: s.vecy
+    }
+    p.render()
+    return p
+  }
+
+  setHealth (health) {
+    this.health = health
+    if (this.health > this.maxHealth) this.health = this.maxHealth
+    else if (this.health <= 0) {
+      this.died = 0
+      this.health = 0
+    }
+
+    var width = this.health * (this.maxHealthBarX - 2) / this.maxHealth
+    this.healthBar.vecx = width
+  }
+
+  heal (amountHealth) {
+    if (Number.isInteger(parseInt(amountHealth))) {
+      this.setHealth(this.health + amountHealth)
+    } else {
+      console.error('Tank::heal: Invalid amountHealth')
+    }
+
+    return this
+  };
+
+  render () {
+      // Draw health bar
+    this.drawHealthBar()
+
+    this.body.rotate(utils.degreeToRadian(this.orientation.degree))
+
+    if (this.turret.orientation !== 0 && this.turret.orientation !== 360) {
+      var rad = utils.degreeToRadian(this.turret.orientation)
+      this.turret.base.rotate(rad)
+    } else {
+
+      this.turret.base.render('#f00')
+    }
+
+    this.turret.canon.render(null, '#f00')
+
+    return this
+  };
+
+  drawHealthBar () {
+    this.gfx.save()
+    let POS_W = - this.healthBar.vecx/2
+    let POS_H = - this.healthBar.vecy/2
+    this.gfx.translate(POS_W,POS_H);
+    this.gfx.fillStyle = 'black'
+    this.gfx.fillRect(this.healthBar.x - 1, this.healthBar.y - 3, this.maxHealthBarX, this.healthBar.width + 1)
+    this.gfx.restore()
+    this.healthBar.render(4, 'red')
+    return this
+  };
+
+}
+
+module.exports = Tank
+
+},{"./baseProjectile":5,"./player":13,"./rectangle":15,"./segment":18,"./utils":20}],20:[function(require,module,exports){
+module.exports = {
+
+  degreeToRadian (d) {
+    return Math.PI * d / 180
+  },
+
+  radianToDegree (r) {
+    return 180 * r / Math.PI
+  }
+
+}
+
+},{}],21:[function(require,module,exports){
+const Renderable = require('./renderable')
+class Vector extends Renderable
+{
+  constructor (_x, _y) {
+    super()
+    this.x = _x
+    this.y = _y
+  }
+
+  render (size, color) {
+    this.gfx.beginPath()
+    this.gfx.arc(this.x, this.y, size, 0, 2 * Math.PI, true)
+    this.gfx.fillStyle = color
+    this.gfx.fill()
+    this.gfx.strokeStyle = color
+    this.gfx.stroke()
+  };
+
+  add (vector) {
+    var v = new Vector(this.x += vector.x, this.y += vector.y)
+    return v
+  };
+
+  subtract (vector) {
+    var v = new Vector(this.x -= vector.x, this.y -= vector.y)
+    return v
+  };
+
+  multiply (multiplier) {
+    var v = new Vector(this.x *= multiplier, this.y *= multiplier)
+    return v
+  };
+
+   // Modulus
+  length () {
+    return Math.sqrt(this.x * this.x + this.y * this.y)
+  };
+
+   // Cross product
+  cross (vector) {
+    return this.x * vector.y - this.y * vector.x
+  };
+
+   // Dot product
+  dot (vector) {
+    return this.x * vector.x + this.y * vector.y
+  }
+};
+
+module.exports = Vector
+
+},{"./renderable":17}]},{},[7]);

@@ -1,4 +1,4 @@
-const Renderable = require('./render')
+const Map = require('./map')
 /**
  * @ Represents the whole game world with dimension width x height
  * @public
@@ -6,21 +6,15 @@ const Renderable = require('./render')
  * @param {integer} height - The height of the GameWorld
  * @constructor {GameWorld} GameWorld
  */
-class GameWorld extends Renderable {
+class GameWorld {
 
+  /**
+   * @constructor {GameWorld} - Constructs a 2D GameWorld given a width and height dimension
+   * @param {integer} width - The width of the GameWorld
+   * @param {integer} height - The height of the GameWorld
+   */
   constructor (width, height) {
-    super()
-    this.width = width
-    this.height = height
-  }
-
-    /**
-     * Render the GameWorld
-     * @public
-     * @return {GameWorld} - Return self reference for chaining
-     */
-  render () {
-    return this
+    this.map = new Map(0, width, height)
   }
 }
 

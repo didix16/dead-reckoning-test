@@ -9,14 +9,16 @@ class GameObject extends Renderable {
 
     /**
      * @func constructor
+     * @param {integer} id - The unique identifier of this GameObject
      * @param {integer} x - The initial X object coordinate position
      * @param {integer} y - The initial X object coordinate position
      * @param {integer} width - The width of the object
      * @param {integer} height - The height of the object
      * @param {integer} radius - The radius of the object
      */
-  constructor (x = 0, y = 0, width = 0, height = 0, radius = 0) {
+  constructor (id = 0, x = 0, y = 0, width = 0, height = 0, radius = 0) {
     super()
+    this.id = id
     this.x = x
     this.y = y
     this.width = width
