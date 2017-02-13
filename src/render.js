@@ -10,10 +10,11 @@ class Render {
      */
   constructor (canvasContext) {
     this.gfx = canvasContext
+
   }
 }
 
-console.log("GLOBALS_OBJ: ",globals);
+console.log("GLOBALS_OBJ: ",globals)
 let render = null;
 if(!globals.getGlobal("SERVER")){
   render = new Render(globals.getGlobal('canvas').getContext('2d'))
