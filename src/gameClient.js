@@ -2,6 +2,7 @@
 let Render = require('./render')
 let Tank = require('./tank')
 let GameCamera = require('./gameCamera')
+let Map = require("./map");
 let globals = require('./globals')
 globals.addGlobal('ACCEL', 1 / 1000);
 
@@ -31,6 +32,31 @@ class GameClient {
     this.gfx = Render
 
     this.camera = new GameCamera(-1, o.camera.x, o.camera.y, o.camera.w, o.camera.h)
+    this.map = new Map(-2,2000,2000);
+
+    // Test: Add map chunks. In future, let the server send us the chunks and we render them
+    //this.map.addChunk(new this.map.MapChunk(0,0,0,this.map.CHUNK_SIZE,this.map.CHUNK_SIZE));
+
+    let cols = parseInt(this.map.width*2 / this.map.CHUNK_SIZE);
+    let rows = parseInt(this.map.height*2 / this.map.CHUNK_SIZE);
+    
+    let chunkId = 0;
+    
+    let cY = -this.map.height;
+    let cX;
+    console.log(cX,cY,cols,rows)
+    for(let chunkR = 0 ;chunkR<rows;chunkR++){
+
+      let cX = -this.map.width;
+      for(let chunkC = 0 ;chunkC<cols;chunkC++){
+
+        this.map.addChunk(new this.map.MapChunk(chunkId,cX,cY,this.map.CHUNK_SIZE,this.map.CHUNK_SIZE));
+        chunkId++;
+        cX += this.map.CHUNK_SIZE;
+      }
+
+      cY += this.map.CHUNK_SIZE;
+    }
 
     this.events = {
       onConnect(){
@@ -87,7 +113,7 @@ class GameClient {
       coinCollected: $this.events.onItemCollected.bind($this),
 
       'game:pong': function (serverNow) {
-        console.log("GAME_PONG==>",serverNow);
+        //console.log("GAME_PONG==>",serverNow);
         const now = Date.now()
         $this.net.ping = (now - $this.net.pingMessageTimestamp) / 2
         $this.clockDiff = (serverNow + $this.net.ping) - now
@@ -102,7 +128,7 @@ class GameClient {
 
   updatePlayer(player, targetTimestamp){
 
-    console.log("UPD_PLAYER=>",player)
+    //console.log("UPD_PLAYER=>",player)
     // dead reckoning
     const { x, y, vx, vy, ax, ay } = player
 
@@ -117,6 +143,7 @@ class GameClient {
     player.vx = vx + (ax * delta)
     player.vy = vy + (ay * delta)
     player.timestamp = targetTimestamp
+    player.move();
 
   }
 
@@ -146,6 +173,12 @@ class GameClient {
     this.camera.focusOn(myPlayer);
 
     // 3. Render the World
+    let mapChunks = this.map.getChunks();
+    for(let chId in mapChunks){
+
+      let mapChunk = mapChunks[chId];
+      mapChunk.render();
+    }
 
     // Draw World graphic
     this.gfx.beginPath();
@@ -238,11 +271,11 @@ class GameClient {
   updateInputs () { 
     const oldInputs = Object.assign({}, this.myInputs)
 
-    if(this.players[myPlayerId].x == NaN) throw new Error("The player has an invalid X coordinate");
-    if(this.players[myPlayerId].y == NaN) throw new Error("The player has an invalid Y coordinate");
     for (let key in this.myInputs) {
       this.myInputs[key] = kb.isKeyDown(kb[key])
     }
+
+
 
     if (!deepEqual(this.myInputs, oldInputs)) {
       this.net.send('move', this.myInputs)

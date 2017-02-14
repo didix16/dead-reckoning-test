@@ -1,4 +1,4 @@
-// const MapChunk = require('./mapChunk')
+const MapChunk = require('./mapChunk')
 /**
  * @class {Map} Map
  * @constructor {Map} Map
@@ -12,17 +12,20 @@ class Map {
      * @param {integer} height - The Map height dimension
      */
   constructor (mapId = 0, width = 0, height = 0) {
-        /**
-         * Contains the Map chunks. A chunk is a map portion or map cell that can hold GameObjects
-         * @member {Object} chunks
-         */
+  /**
+   * Contains the Map chunks. A chunk is a map portion or map cell that can hold GameObjects
+   * @member {Object} chunks
+   */
     this.chunks = {}
-
-        /**
-         * The chunk size as CHUNK_SIZE x CHUNK_SIZE
-         * @const {type} name
-         */
-    this.CHUNK_SIZE = 40
+    this.id = mapId;
+    this.width = width;
+    this.height = height;
+    this.MapChunk = MapChunk;
+    /**
+     * The chunk size as CHUNK_SIZE x CHUNK_SIZE
+     * @const {type} name
+     */
+    this.CHUNK_SIZE = 400
   }
 
     /**

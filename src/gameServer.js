@@ -97,7 +97,7 @@ class GameServer {
       },
 
       onPlayerMoved (socket, inputs) {
-        console.log(inputs)
+        //console.log(inputs)
         console.log(`${new Date()}: ${socket.id} moved`)
 
         const player = $this.players[socket.id]
@@ -108,7 +108,8 @@ class GameServer {
         utils.calculatePlayerAcceleration(player)
 
         //console.log("PLAYER_NEW_ACC", player);
-        socket.emit('playerMoved', player)
+        socket.emit('playerMoved', player);
+        socket.broadcast.emit('playerMoved', player);
       },
 
       onPlayerDisconnected (socket) {
@@ -126,7 +127,7 @@ class GameServer {
 
     const { x, y, vx, vy, ax, ay } = player
 
-    console.log('UPDT_PLAYER==>', x,y,vx,vy,ax,ay);
+    //console.log('UPDT_PLAYER==>', x,y,vx,vy,ax,ay);
     //throw new Error("STOP");
 
     const delta = targetTimestamp - player.timestamp
@@ -147,7 +148,7 @@ class GameServer {
 
     for (let playerId in this.players) {
       const player = this.players[playerId]
-      console.log(playerId, player)
+      //console.log(playerId, player)
       this.updatePlayer(player, now)
 
       // player <-> items collision detection

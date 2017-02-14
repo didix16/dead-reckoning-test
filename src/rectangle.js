@@ -48,7 +48,7 @@ class Rectangle extends Renderable {
     return false
   }
 
-  rotate (radians) {
+  rotate (radians,color,fill) {
     this.gfx.save()
     let POS_W = - this.width/2
     let POS_H = - 3/2*this.height
@@ -57,7 +57,7 @@ class Rectangle extends Renderable {
     this.gfx.rotate(radians)
     this.gfx.translate(-this.x - this.width / 2, -this.y + this.height / 2)
     
-    this.render('#f00')
+    this.render(color,fill)
     this.gfx.restore()
     return this
   };

@@ -264,7 +264,7 @@ class Circle extends Renderable
 
 module.exports = Circle
 
-},{"./renderable":17}],7:[function(require,module,exports){
+},{"./renderable":19}],7:[function(require,module,exports){
 /* globals io */
 
 // tool de test_ coverage && coverall
@@ -363,6 +363,7 @@ module.exports = GameCamera
 let Render = require('./render')
 let Tank = require('./tank')
 let GameCamera = require('./gameCamera')
+let Map = require("./map");
 let globals = require('./globals')
 globals.addGlobal('ACCEL', 1 / 1000);
 
@@ -392,6 +393,31 @@ class GameClient {
     this.gfx = Render
 
     this.camera = new GameCamera(-1, o.camera.x, o.camera.y, o.camera.w, o.camera.h)
+    this.map = new Map(-2,2000,2000);
+
+    // Test: Add map chunks. In future, let the server send us the chunks and we render them
+    //this.map.addChunk(new this.map.MapChunk(0,0,0,this.map.CHUNK_SIZE,this.map.CHUNK_SIZE));
+
+    let cols = parseInt(this.map.width*2 / this.map.CHUNK_SIZE);
+    let rows = parseInt(this.map.height*2 / this.map.CHUNK_SIZE);
+    
+    let chunkId = 0;
+    
+    let cY = -this.map.height;
+    let cX;
+    console.log(cX,cY,cols,rows)
+    for(let chunkR = 0 ;chunkR<rows;chunkR++){
+
+      let cX = -this.map.width;
+      for(let chunkC = 0 ;chunkC<cols;chunkC++){
+
+        this.map.addChunk(new this.map.MapChunk(chunkId,cX,cY,this.map.CHUNK_SIZE,this.map.CHUNK_SIZE));
+        chunkId++;
+        cX += this.map.CHUNK_SIZE;
+      }
+
+      cY += this.map.CHUNK_SIZE;
+    }
 
     this.events = {
       onConnect(){
@@ -448,7 +474,7 @@ class GameClient {
       coinCollected: $this.events.onItemCollected.bind($this),
 
       'game:pong': function (serverNow) {
-        console.log("GAME_PONG==>",serverNow);
+        //console.log("GAME_PONG==>",serverNow);
         const now = Date.now()
         $this.net.ping = (now - $this.net.pingMessageTimestamp) / 2
         $this.clockDiff = (serverNow + $this.net.ping) - now
@@ -463,7 +489,7 @@ class GameClient {
 
   updatePlayer(player, targetTimestamp){
 
-    console.log("UPD_PLAYER=>",player)
+    //console.log("UPD_PLAYER=>",player)
     // dead reckoning
     const { x, y, vx, vy, ax, ay } = player
 
@@ -478,6 +504,7 @@ class GameClient {
     player.vx = vx + (ax * delta)
     player.vy = vy + (ay * delta)
     player.timestamp = targetTimestamp
+    player.move();
 
   }
 
@@ -507,6 +534,12 @@ class GameClient {
     this.camera.focusOn(myPlayer);
 
     // 3. Render the World
+    let mapChunks = this.map.getChunks();
+    for(let chId in mapChunks){
+
+      let mapChunk = mapChunks[chId];
+      mapChunk.render();
+    }
 
     // Draw World graphic
     this.gfx.beginPath();
@@ -603,6 +636,8 @@ class GameClient {
       this.myInputs[key] = kb.isKeyDown(kb[key])
     }
 
+
+
     if (!deepEqual(this.myInputs, oldInputs)) {
       this.net.send('move', this.myInputs)
 
@@ -635,7 +670,7 @@ class GameClient {
 
 module.exports = GameClient
 
-},{"./gameCamera":8,"./globals":11,"./net":12,"./render":16,"./tank":19,"./utils":20,"@dasilvacontin/keyboard":1,"deep-equal":2}],10:[function(require,module,exports){
+},{"./gameCamera":8,"./globals":11,"./map":12,"./net":14,"./render":18,"./tank":21,"./utils":22,"@dasilvacontin/keyboard":1,"deep-equal":2}],10:[function(require,module,exports){
 const Renderable = require('./renderable')
 /**
  * Represents a in-game object in 2D. Has a x,y width and height
@@ -779,7 +814,7 @@ class GameObject extends Renderable {
 
 module.exports = GameObject
 
-},{"./renderable":17}],11:[function(require,module,exports){
+},{"./renderable":19}],11:[function(require,module,exports){
 let globals = {
 
   vars: {},
@@ -819,6 +854,120 @@ let globals = {
 module.exports = globals
 
 },{}],12:[function(require,module,exports){
+const MapChunk = require('./mapChunk')
+/**
+ * @class {Map} Map
+ * @constructor {Map} Map
+ */
+class Map {
+
+    /**
+     * @constructor {Map} Map
+     * @param {integer} mapId - A unique Map identifier
+     * @param {integer} width - The Map width dimension
+     * @param {integer} height - The Map height dimension
+     */
+  constructor (mapId = 0, width = 0, height = 0) {
+  /**
+   * Contains the Map chunks. A chunk is a map portion or map cell that can hold GameObjects
+   * @member {Object} chunks
+   */
+    this.chunks = {}
+    this.id = mapId;
+    this.width = width;
+    this.height = height;
+    this.MapChunk = MapChunk;
+    /**
+     * The chunk size as CHUNK_SIZE x CHUNK_SIZE
+     * @const {type} name
+     */
+    this.CHUNK_SIZE = 400
+  }
+
+    /**
+     * Adds a MapChunk to this map
+     * @param {MapChunk} mapChunk - A MapChunk object
+     */
+  addChunk (mapChunk) {
+    this.chunks[mapChunk.id] = mapChunk
+    return this
+  }
+
+  removeChunk (mapChunkId) {
+    delete this.chunks[mapChunkId]
+  }
+
+    /**
+     * @return {Object} - Return the map chunks
+     */
+  getChunks () {
+    return this.chunks
+  }
+}
+
+module.exports = Map
+
+},{"./mapChunk":13}],13:[function(require,module,exports){
+
+let Renderable = require("./renderable");
+let Rectangle = require("./rectangle");
+
+class MapChunk extends Renderable {
+
+    /**
+     * @constructor {MapChunk} - The MapChunk constructor
+     * @param {integer} mcId - The MapChunk unique identifier. The identifier must be a coordinate index inside the World
+     * @param {integer} x - The X World coordinate at this chunk starts (top left corner)
+     * @param {integer} y - The Y World coordinate at this chunk starts (top left corner)
+     * @param {integer} width - The MapChunk width dimension
+     * @param {integer} height - The MapChunk height dimension
+     */
+  constructor (mcId, x,y,width = 0, height = 0) {
+    super();
+    this.x = x;
+    this.y = y;
+    this.width = width
+    this.height = height
+    this.gameObjects = {}
+    this.id = mcId
+    this.background = new Rectangle(x,y,this.width,this.height);
+  }
+
+    /**
+     * @param {GameObject} gameObject - Adds a gameObject to this MapChunk
+     * @return {MapChunk} - Return self instance
+     */
+  addGameObject (gameObject) {
+    this.gameObjects[gameObject.id] = gameObject
+    return this
+  }
+
+    /**
+     * @return {Array} - Returns the GameObjects inside this MapChunk
+     */
+  getGameObjects () {
+    return this.gameObjects
+  }
+
+    /**
+     * @param {integer} gameObjectId - Remove a gameObject of this MapChunk
+     * @return {MapChunk} - Return self instance
+     */
+  removeGameObject (gameObjectId) {
+    delete this.gameObjects[gameObjectId]
+    return this
+  }
+
+  render(){
+
+    this.background.render("green",true);
+    return this;
+  }
+}
+
+module.exports = MapChunk
+
+},{"./rectangle":17,"./renderable":19}],14:[function(require,module,exports){
 // Dead reckoning - Algorithm
 
 // Rocket legue -> Simulation + Redo
@@ -956,7 +1105,7 @@ class Network {
 
 module.exports = Network
 
-},{}],13:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 const GameObject = require('./gameObject')
 
 /**
@@ -975,7 +1124,7 @@ class Player extends GameObject {
 
 module.exports = Player
 
-},{"./gameObject":10}],14:[function(require,module,exports){
+},{"./gameObject":10}],16:[function(require,module,exports){
 const Renderable = require('./renderable')
 class Point extends Renderable
 {
@@ -999,7 +1148,7 @@ class Point extends Renderable
 
 module.exports = Point
 
-},{"./renderable":17}],15:[function(require,module,exports){
+},{"./renderable":19}],17:[function(require,module,exports){
 const Point = require('./point')
 const Renderable = require('./renderable')
 class Rectangle extends Renderable {
@@ -1050,7 +1199,7 @@ class Rectangle extends Renderable {
     return false
   }
 
-  rotate (radians) {
+  rotate (radians,color,fill) {
     this.gfx.save()
     let POS_W = - this.width/2
     let POS_H = - 3/2*this.height
@@ -1059,7 +1208,7 @@ class Rectangle extends Renderable {
     this.gfx.rotate(radians)
     this.gfx.translate(-this.x - this.width / 2, -this.y + this.height / 2)
     
-    this.render('#f00')
+    this.render(color,fill)
     this.gfx.restore()
     return this
   };
@@ -1068,7 +1217,7 @@ class Rectangle extends Renderable {
 
 module.exports = Rectangle
 
-},{"./point":14,"./renderable":17}],16:[function(require,module,exports){
+},{"./point":16,"./renderable":19}],18:[function(require,module,exports){
 let globals = require('./globals');
 class Render {
 
@@ -1102,7 +1251,7 @@ if(!globals.getGlobal("SERVER")){
 }else{
   module.exports = null
 }
-},{"./globals":11}],17:[function(require,module,exports){
+},{"./globals":11}],19:[function(require,module,exports){
 const Render = require('./render') // Instance of GFX
 let globals = require('./globals');
 /**
@@ -1131,7 +1280,7 @@ class Renderable {
 module.exports = Renderable
 
 
-},{"./globals":11,"./render":16}],18:[function(require,module,exports){
+},{"./globals":11,"./render":18}],20:[function(require,module,exports){
 /* globals window */
 const globals = require("./globals");
 
@@ -1286,7 +1435,7 @@ class Segment extends Renderable
 
 module.exports = Segment
 
-},{"./globals":11,"./point":14,"./renderable":17,"./vector":21}],19:[function(require,module,exports){
+},{"./globals":11,"./point":16,"./renderable":19,"./vector":23}],21:[function(require,module,exports){
 const utils = require('./utils')
 const Player = require('./player')
 const Segment = require('./segment')
@@ -1301,6 +1450,7 @@ class Tank extends Player
     this.health = o.health ? o.health : 100
     this.maxHealth = o.maxHealth ? o.maxHealth : 100
     this.died = false
+    this.color = o.color;
 
     this.healthBarOffset = 30
     this.healthBar = new Segment(this.x, this.y - this.healthBarOffset, 40, 0, 5)
@@ -1374,9 +1524,9 @@ class Tank extends Player
   };
 
    // Just move forward into orientation direction
-  move (distance) {
-    this.x += this.orientation.x * distance
-    this.y += this.orientation.y * distance
+  move () {
+    //this.x += this.orientation.x * distance
+    //this.y += this.orientation.y * distance
 
     this.body.x = this.x
     this.turret.base.x = this.x + this.width / 4
@@ -1452,33 +1602,30 @@ class Tank extends Player
 
   render () {
       // Draw health bar
-    this.gfx.save();
     this.drawHealthBar()
 
-    this.body.rotate(utils.degreeToRadian(this.orientation.degree))
+    this.body.rotate(utils.degreeToRadian(this.orientation.degree),"#3A5320",true)
 
-    this.gfx.translate(-this.turret.base.width/2,-this.turret.base.height/2)
+    this.gfx.translate(-this.turret.base.width,-this.turret.base.height)
     if (this.turret.orientation !== 0 && this.turret.orientation !== 360) {
       var rad = utils.degreeToRadian(this.turret.orientation)
       this.turret.base.rotate(rad)
     } else {
 
-      this.turret.base.render('#f00')
+      this.turret.base.render(this.color,true)
     }
 
-    this.gfx.translate(-this.turret.base.width/2,-this.turret.base.height/2)
-    this.turret.canon.render(null, '#f00')
-    this.gfx.restore()
-    this.gfx.restore();
+    
+    //this.gfx.translate(this.turret.base.width,this.turret.base.height)
+    this.turret.canon.render(null, this.color)
 
     return this
   };
 
   drawHealthBar () {
     this.gfx.save()
-    let POS_W = - this.healthBar.vecx/2
-    let POS_H = - this.healthBar.vecy/2
-    this.gfx.translate(POS_W,POS_H);
+    let POS_W = (-this.maxHealthBarX+2)/2;
+    this.gfx.translate(POS_W,0);
     this.gfx.fillStyle = 'black'
     this.gfx.fillRect(this.healthBar.x - 1, this.healthBar.y - 3, this.maxHealthBarX, this.healthBar.width + 1)
 
@@ -1491,17 +1638,21 @@ class Tank extends Player
 
 module.exports = Tank
 
-},{"./baseProjectile":5,"./player":13,"./rectangle":15,"./segment":18,"./utils":20}],20:[function(require,module,exports){
+},{"./baseProjectile":5,"./player":15,"./rectangle":17,"./segment":20,"./utils":22}],22:[function(require,module,exports){
 let globals = require("./globals")
 let ACCEL = globals.getGlobal("ACCEL");
+if(!ACCEL){
+  globals.addGlobal("ACCEL",1/1000);
+  ACCEL = globals.getGlobal("ACCEL");
+}
 module.exports = {
 
   degreeToRadian (d) {
-    return Math.PI * d / 180
+    return Math.PI * d / 180;
   },
 
   radianToDegree (r) {
-    return 180 * r / Math.PI
+    return 180 * r / Math.PI;
   },
 
   calculatePlayerAcceleration(player){
@@ -1509,6 +1660,8 @@ module.exports = {
     const { inputs } = player
     let ax = 0
     let ay = 0
+    console.log("ACCELERATION IS==>",ACCEL);
+    if(!ACCEL) throw new Error("A");
     if (inputs.LEFT_ARROW) ax -= ACCEL
     if (inputs.RIGHT_ARROW) ax += ACCEL
     if (inputs.UP_ARROW) ay -= ACCEL
@@ -1520,7 +1673,7 @@ module.exports = {
 
 }
 
-},{"./globals":11}],21:[function(require,module,exports){
+},{"./globals":11}],23:[function(require,module,exports){
 const Renderable = require('./renderable')
 class Vector extends Renderable
 {
@@ -1574,4 +1727,4 @@ class Vector extends Renderable
 
 module.exports = Vector
 
-},{"./renderable":17}]},{},[7]);
+},{"./renderable":19}]},{},[7]);

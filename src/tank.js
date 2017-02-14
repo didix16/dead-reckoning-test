@@ -12,6 +12,7 @@ class Tank extends Player
     this.health = o.health ? o.health : 100
     this.maxHealth = o.maxHealth ? o.maxHealth : 100
     this.died = false
+    this.color = o.color;
 
     this.healthBarOffset = 30
     this.healthBar = new Segment(this.x, this.y - this.healthBarOffset, 40, 0, 5)
@@ -85,9 +86,9 @@ class Tank extends Player
   };
 
    // Just move forward into orientation direction
-  move (distance) {
-    this.x += this.orientation.x * distance
-    this.y += this.orientation.y * distance
+  move () {
+    //this.x += this.orientation.x * distance
+    //this.y += this.orientation.y * distance
 
     this.body.x = this.x
     this.turret.base.x = this.x + this.width / 4
@@ -163,33 +164,30 @@ class Tank extends Player
 
   render () {
       // Draw health bar
-    this.gfx.save();
     this.drawHealthBar()
 
-    this.body.rotate(utils.degreeToRadian(this.orientation.degree))
+    this.body.rotate(utils.degreeToRadian(this.orientation.degree),"#3A5320",true)
 
-    this.gfx.translate(-this.turret.base.width/2,-this.turret.base.height/2)
+    this.gfx.translate(-this.turret.base.width,-this.turret.base.height)
     if (this.turret.orientation !== 0 && this.turret.orientation !== 360) {
       var rad = utils.degreeToRadian(this.turret.orientation)
       this.turret.base.rotate(rad)
     } else {
 
-      this.turret.base.render('#f00')
+      this.turret.base.render(this.color,true)
     }
 
-    this.gfx.translate(-this.turret.base.width/2,-this.turret.base.height/2)
-    this.turret.canon.render(null, '#f00')
-    this.gfx.restore()
-    this.gfx.restore();
+    
+    //this.gfx.translate(this.turret.base.width,this.turret.base.height)
+    this.turret.canon.render(null, this.color)
 
     return this
   };
 
   drawHealthBar () {
     this.gfx.save()
-    let POS_W = - this.healthBar.vecx/2
-    let POS_H = - this.healthBar.vecy/2
-    this.gfx.translate(POS_W,POS_H);
+    let POS_W = (-this.maxHealthBarX+2)/2;
+    this.gfx.translate(POS_W,0);
     this.gfx.fillStyle = 'black'
     this.gfx.fillRect(this.healthBar.x - 1, this.healthBar.y - 3, this.maxHealthBarX, this.healthBar.width + 1)
 
