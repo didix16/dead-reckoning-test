@@ -9,7 +9,12 @@ var keyCodes = {
   LEFT_ARROW: 37,
   UP_ARROW: 38,
   RIGHT_ARROW: 39,
-  DOWN_ARROW: 40
+  DOWN_ARROW: 40,
+  A: 65,
+  W: 85,
+  S: 83,
+  D: 68,
+  Q: 81
 }
 for (var keyName in keyCodes) {
   exports[keyName] = keyCodes[keyName]
@@ -387,7 +392,12 @@ class GameClient {
       LEFT_ARROW: false,
       RIGHT_ARROW: false,
       UP_ARROW: false,
-      DOWN_ARROW: false
+      DOWN_ARROW: false,
+      A: false,
+      W: false,
+      S: false,
+      D: false,
+      Q: false
     }
 
     this.gfx = Render
@@ -449,6 +459,11 @@ class GameClient {
         console.log("PLAYER_AFTER_INIT_TANK==>",$this.players[player.id])
       },
 
+      onPlayerRotateTurret(player){
+
+        $this.players[player.id] = new Tank(player);
+      },
+
       onItemSpawned (item) {
         $this.items[item.id] = item
       },
@@ -469,6 +484,7 @@ class GameClient {
       'connect': $this.events.onConnect.bind($this),
       'world:init': $this.events.onWorldInit.bind($this),
       playerMoved: $this.events.onPlayerMoved.bind($this),
+      playerRotateTurret: $this.events.onPlayerRotateTurret.bind($this),
       playerDisconnected: $this.events.onPlayerDisconnected.bind($this),
       coinSpawned: $this.events.onItemSpawned.bind($this),
       coinCollected: $this.events.onItemCollected.bind($this),
@@ -641,6 +657,9 @@ class GameClient {
     if (!deepEqual(this.myInputs, oldInputs)) {
       this.net.send('move', this.myInputs)
 
+      if(this.myInputs.A){
+        this.net.send('rotateTurret',this.myInputs);
+      }
       // update our local player' inputs aproximately when the server
       // takes them into account
       const frozenInputs = Object.assign({}, this.myInputs)
@@ -1201,12 +1220,9 @@ class Rectangle extends Renderable {
 
   rotate (radians,color,fill) {
     this.gfx.save()
-    let POS_W = - this.width/2
-    let POS_H = - 3/2*this.height
-    this.gfx.translate(POS_W,POS_H);
     this.gfx.translate(this.x + this.width / 2, this.y + this.height / 2)
     this.gfx.rotate(radians)
-    this.gfx.translate(-this.x - this.width / 2, -this.y + this.height / 2)
+    this.gfx.translate(-this.x - this.width / 2, -this.y - this.height / 2)
     
     this.render(color,fill)
     this.gfx.restore()
@@ -1470,6 +1486,11 @@ class Tank extends Player
       orientation: 0 // In degrees
     }
 
+    if(o.turret && o.turret.orientation){
+
+      this.rotateTurret(o.turret.orientation);
+    }
+
         // Speed X
     this.vx = o.vx ? o.vx : 0
         // Speed y
@@ -1604,12 +1625,20 @@ class Tank extends Player
       // Draw health bar
     this.drawHealthBar()
 
+    let POS_W = - this.width/2
+    let POS_H = - this.height/2
+    this.gfx.save();
+    this.gfx.translate(POS_W,POS_H);
+    
     this.body.rotate(utils.degreeToRadian(this.orientation.degree),"#3A5320",true)
+    this.gfx.restore();
 
     this.gfx.translate(-this.turret.base.width,-this.turret.base.height)
     if (this.turret.orientation !== 0 && this.turret.orientation !== 360) {
       var rad = utils.degreeToRadian(this.turret.orientation)
-      this.turret.base.rotate(rad)
+      //this.gfx.translate(0,-this.body.height/4)
+      this.turret.base.rotate(rad,this.color,true)
+      //this.gfx.translate(-this.body.width/4,-this.body.height/4)
     } else {
 
       this.turret.base.render(this.color,true)

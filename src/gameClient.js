@@ -26,7 +26,12 @@ class GameClient {
       LEFT_ARROW: false,
       RIGHT_ARROW: false,
       UP_ARROW: false,
-      DOWN_ARROW: false
+      DOWN_ARROW: false,
+      A: false,
+      W: false,
+      S: false,
+      D: false,
+      Q: false
     }
 
     this.gfx = Render
@@ -88,6 +93,11 @@ class GameClient {
         console.log("PLAYER_AFTER_INIT_TANK==>",$this.players[player.id])
       },
 
+      onPlayerRotateTurret(player){
+
+        $this.players[player.id] = new Tank(player);
+      },
+
       onItemSpawned (item) {
         $this.items[item.id] = item
       },
@@ -108,6 +118,7 @@ class GameClient {
       'connect': $this.events.onConnect.bind($this),
       'world:init': $this.events.onWorldInit.bind($this),
       playerMoved: $this.events.onPlayerMoved.bind($this),
+      playerRotateTurret: $this.events.onPlayerRotateTurret.bind($this),
       playerDisconnected: $this.events.onPlayerDisconnected.bind($this),
       coinSpawned: $this.events.onItemSpawned.bind($this),
       coinCollected: $this.events.onItemCollected.bind($this),
@@ -280,6 +291,9 @@ class GameClient {
     if (!deepEqual(this.myInputs, oldInputs)) {
       this.net.send('move', this.myInputs)
 
+      if(this.myInputs.A){
+        this.net.send('rotateTurret',this.myInputs);
+      }
       // update our local player' inputs aproximately when the server
       // takes them into account
       const frozenInputs = Object.assign({}, this.myInputs)

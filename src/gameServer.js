@@ -46,6 +46,11 @@ class GameServer {
        $this.events.onPlayerMoved(this, inputs)
       },
 
+      rotateTurret: function(inputs) {
+        console.log("Player rotate turret");
+        $this.events.onPlayerRotateTurret(this, inputs)
+      },
+
       disconnect: function () {
         $this.events.onPlayerDisconnected(this)
       }
@@ -60,7 +65,12 @@ class GameServer {
           LEFT_ARROW: false,
           RIGHT_ARROW: false,
           UP_ARROW: false,
-          DOWN_ARROW: false
+          DOWN_ARROW: false,
+          A: false,
+          W: false,
+          S: false,
+          D: false,
+          Q: false
         }
 
         const player = new Tank({
@@ -110,6 +120,25 @@ class GameServer {
         //console.log("PLAYER_NEW_ACC", player);
         socket.emit('playerMoved', player);
         socket.broadcast.emit('playerMoved', player);
+      },
+
+      onPlayerRotateTurret(socket, inputs) {
+
+        console.log(`${new Date()}: ${socket.id} moved`)
+
+        const player = $this.players[socket.id]
+        const now = Date.now()
+        $this.updatePlayer(player, now)
+
+        player.inputs = inputs
+        if(player.inputs.A)
+          player.turret.orientation += 4;
+        else if(player.inputs.D)
+          player.turret.orientation -= 4;
+
+        //console.log("PLAYER_NEW_ACC", player);
+        socket.emit('playerRotateTurret', player);
+        socket.broadcast.emit('playerRotateTurret', player);
       },
 
       onPlayerDisconnected (socket) {

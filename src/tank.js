@@ -32,6 +32,11 @@ class Tank extends Player
       orientation: 0 // In degrees
     }
 
+    if(o.turret && o.turret.orientation){
+
+      this.rotateTurret(o.turret.orientation);
+    }
+
         // Speed X
     this.vx = o.vx ? o.vx : 0
         // Speed y
@@ -166,12 +171,20 @@ class Tank extends Player
       // Draw health bar
     this.drawHealthBar()
 
+    let POS_W = - this.width/2
+    let POS_H = - this.height/2
+    this.gfx.save();
+    this.gfx.translate(POS_W,POS_H);
+    
     this.body.rotate(utils.degreeToRadian(this.orientation.degree),"#3A5320",true)
+    this.gfx.restore();
 
     this.gfx.translate(-this.turret.base.width,-this.turret.base.height)
     if (this.turret.orientation !== 0 && this.turret.orientation !== 360) {
       var rad = utils.degreeToRadian(this.turret.orientation)
-      this.turret.base.rotate(rad)
+      //this.gfx.translate(0,-this.body.height/4)
+      this.turret.base.rotate(rad,this.color,true)
+      //this.gfx.translate(-this.body.width/4,-this.body.height/4)
     } else {
 
       this.turret.base.render(this.color,true)
