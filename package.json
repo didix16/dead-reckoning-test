@@ -1,7 +1,6 @@
 {
   "name": "dead-reckoning-test",
   "version": "1.0.0",
-  "description": "",
   "main": "server.js",
   "scripts": {
     "prebuild": "npm run test",
@@ -27,11 +26,13 @@
   },
   "devDependencies": {
     "browserify": "^14.0.0",
+    "chokidar": "^1.6.1",
     "chokidar-cli": "^1.2.0",
     "standard": "^8.6.0"
   },
   "bugs": {
     "url": "https://github.com/didix16/dead-reckoning-test/issues"
   },
-  "homepage": "https://github.com/didix16/dead-reckoning-test#readme"
+  "homepage": "https://github.com/didix16/dead-reckoning-test#readme",
+  "description": ""
 }

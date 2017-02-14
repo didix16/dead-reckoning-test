@@ -238,6 +238,8 @@ class GameClient {
   updateInputs () { 
     const oldInputs = Object.assign({}, this.myInputs)
 
+    if(this.players[myPlayerId].x == NaN) throw new Error("The player has an invalid X coordinate");
+    if(this.players[myPlayerId].y == NaN) throw new Error("The player has an invalid Y coordinate");
     for (let key in this.myInputs) {
       this.myInputs[key] = kb.isKeyDown(kb[key])
     }
