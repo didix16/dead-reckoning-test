@@ -1,5 +1,4 @@
 const GameObject = require('./gameObject')
-const Render = require('./render')
 /**
  * A camera that foucus the scene in some part of the game world
  * @public
@@ -13,6 +12,7 @@ class GameCamera extends GameObject {
 
   constructor (id = -1, x, y, width, height) {
     super(id, x, y, width, height)
+    this.isFocusedOnSomething = false
   }
 
     /**
@@ -22,13 +22,28 @@ class GameCamera extends GameObject {
      * @return {GameCamera} - Return a self reference for chaining
      */
   focusOn (object) {
-    Render.gfx.save()
-    this.x = object.x - this.width / 2
-    this.y = object.y - this.height / 2
+    
+    if(!object) return this;
+    this.gfx.save()
+    this.x = 0
+    this.y = 0
 
-    Render.gfx.translate(this.x, this.y)
-    Render.gfx.restore()
+    this.gfx.translate(this.width/2 - object.x - this.x, this.height/2 - object.y - this.y)
+    //Render.gfx.restore()
+    this.isFocusedOnSomething = true
     return this
+  }
+  
+  /**
+   * Restores the canvas origin. (Avoid inifinite translate) Must be used if focusOn is used
+   * @return {GameCamera} - The self instance for chaining
+   * 
+   * @memberOf GameCamera
+   */
+  restoreFocus(){
+
+    if(this.isFocusedOnSomething) this.gfx.restore()
+    return this;
   }
 }
 

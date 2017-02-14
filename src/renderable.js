@@ -21,30 +21,6 @@ class Renderable {
     this.gfx = Render
   }
 
-   renderAll() {
-
-    // Add first layer
-    this.gfx.save()
-
-    // Move camera
-    this.layers.camera.render()
-
-    // Render world
-    this.layers.world.render()
-
-    this.gfx.save()
-    // Render objects
-
-    this.layers.objects.render()
-
-    // Restore the World layer
-    this.world.restore()
-
-    // Restore to base layer
-    this.restore()
-
-  }
-
 }
 
 module.exports = Renderable

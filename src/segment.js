@@ -30,9 +30,6 @@ class Segment extends Renderable
 
   render (width, color) {
     this.gfx.save()
-    let POS_W = - this.vecx/2
-    let POS_H = - this.vecy/2
-    this.gfx.translate(POS_W,POS_H);
     this.gfx.beginPath()
     this.gfx.lineWidth = width !== undefined && width !== null ? width : this.width
     this.gfx.moveTo(this.x, this.y)

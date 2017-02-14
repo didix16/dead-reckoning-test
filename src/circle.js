@@ -15,6 +15,7 @@ class Circle extends Renderable
   };
 
   render (color, fill) {
+    this.gfx.save();
     this.gfx.beginPath()
     this.gfx.arc(this.x, this.y, this.radius * this.scale, 0, 2 * Math.PI)
     this.gfx.strokeStyle = color
@@ -23,6 +24,7 @@ class Circle extends Renderable
       this.gfx.fillStyle = color
       this.gfx.fill()
     }
+    this.gfx.restore();
   };
 }
 

@@ -249,6 +249,7 @@ class Circle extends Renderable
   };
 
   render (color, fill) {
+    this.gfx.save();
     this.gfx.beginPath()
     this.gfx.arc(this.x, this.y, this.radius * this.scale, 0, 2 * Math.PI)
     this.gfx.strokeStyle = color
@@ -257,6 +258,7 @@ class Circle extends Renderable
       this.gfx.fillStyle = color
       this.gfx.fill()
     }
+    this.gfx.restore();
   };
 }
 
@@ -306,7 +308,6 @@ game.run()
 
 },{"./gameClient":9,"./globals":11}],8:[function(require,module,exports){
 const GameObject = require('./gameObject')
-const Render = require('./render')
 /**
  * A camera that foucus the scene in some part of the game world
  * @public
@@ -320,6 +321,7 @@ class GameCamera extends GameObject {
 
   constructor (id = -1, x, y, width, height) {
     super(id, x, y, width, height)
+    this.isFocusedOnSomething = false
   }
 
     /**
@@ -329,30 +331,46 @@ class GameCamera extends GameObject {
      * @return {GameCamera} - Return a self reference for chaining
      */
   focusOn (object) {
-    Render.gfx.save()
-    this.x = object.x - this.width / 2
-    this.y = object.y - this.height / 2
+    
+    if(!object) return this;
+    this.gfx.save()
+    this.x = 0
+    this.y = 0
 
-    Render.gfx.translate(this.x, this.y)
-    Render.gfx.restore()
+    this.gfx.translate(this.width/2 - object.x - this.x, this.height/2 - object.y - this.y)
+    //Render.gfx.restore()
+    this.isFocusedOnSomething = true
     return this
+  }
+  
+  /**
+   * Restores the canvas origin. (Avoid inifinite translate) Must be used if focusOn is used
+   * @return {GameCamera} - The self instance for chaining
+   * 
+   * @memberOf GameCamera
+   */
+  restoreFocus(){
+
+    if(this.isFocusedOnSomething) this.gfx.restore()
+    return this;
   }
 }
 
 module.exports = GameCamera
 
-},{"./gameObject":10,"./render":16}],9:[function(require,module,exports){
+},{"./gameObject":10}],9:[function(require,module,exports){
 /* globals requestAnimationFrame, window  */
 let Render = require('./render')
 let Tank = require('./tank')
 let GameCamera = require('./gameCamera')
 let globals = require('./globals')
+globals.addGlobal('ACCEL', 1 / 1000);
+
+let utils = require("./utils")
 let Network = require('./net')
 const deepEqual = require('deep-equal')
 const kb = require('@dasilvacontin/keyboard')
 
-globals.addGlobal('ACCEL', 1 / 1000);
-let ACCEL = globals.getGlobal('ACCEL');
 class GameClient {
 
   constructor (o) {
@@ -362,7 +380,7 @@ class GameClient {
     this.items = {}
     this.projectiles = {}
     this.lastLogic = 0
-    this.clockDiff
+    this.clockDiff = 0
     this.myPlayerId = null
     this.myInputs = {
       LEFT_ARROW: false,
@@ -376,6 +394,12 @@ class GameClient {
     this.camera = new GameCamera(-1, o.camera.x, o.camera.y, o.camera.w, o.camera.h)
 
     this.events = {
+      onConnect(){
+
+        // On connect start pinging
+        $this.net.sendPing()
+      },
+
       onWorldInit (data) {
         console.log('INCOMING_DATA',data)
         var playerIds = Object.keys(data.serverPlayers)
@@ -393,31 +417,10 @@ class GameClient {
       },
 
       onPlayerMoved (player) {
-        console.log(player)
+        console.log("ARRIVING_PLAYER==>",player)
         $this.players[player.id] = new Tank(player);
 
-        const delta = ($this.lastLogic + $this.clockDiff) - player.timestamp
-
-                // increment position due to current velocity
-                // and update our velocity accordingly
-        player.x += player.vx * delta
-        player.y += player.vy * delta
-
-        const { inputs } = player
-        if (inputs.LEFT_ARROW && !inputs.RIGHT_ARROW) {
-          player.x -= ACCEL * Math.pow(delta, 2) / 2
-          player.vx -= ACCEL * delta
-        } else if (!inputs.LEFT_ARROW && inputs.RIGHT_ARROW) {
-          player.x += ACCEL * Math.pow(delta, 2) / 2
-          player.vx += ACCEL * delta
-        }
-        if (inputs.UP_ARROW && !inputs.DOWN_ARROW) {
-          player.y -= ACCEL * Math.pow(delta, 2) / 2
-          player.vy -= ACCEL * delta
-        } else if (!inputs.UP_ARROW && inputs.DOWN_ARROW) {
-          player.y += ACCEL * Math.pow(delta, 2) / 2
-          player.vy += ACCEL * delta
-        }
+        console.log("PLAYER_AFTER_INIT_TANK==>",$this.players[player.id])
       },
 
       onItemSpawned (item) {
@@ -437,6 +440,7 @@ class GameClient {
     }
     
     this.netEvents = {
+      'connect': $this.events.onConnect.bind($this),
       'world:init': $this.events.onWorldInit.bind($this),
       playerMoved: $this.events.onPlayerMoved.bind($this),
       playerDisconnected: $this.events.onPlayerDisconnected.bind($this),
@@ -444,42 +448,111 @@ class GameClient {
       coinCollected: $this.events.onItemCollected.bind($this),
 
       'game:pong': function (serverNow) {
-        $this.net.ping = (Date.now() - $this.net.lastPingTimestamp) / 2
-        $this.clockDiff = Date.now() - serverNow + $this.net.ping
+        console.log("GAME_PONG==>",serverNow);
+        const now = Date.now()
+        $this.net.ping = (now - $this.net.pingMessageTimestamp) / 2
+        $this.clockDiff = (serverNow + $this.net.ping) - now
+        setTimeout(() => {
+          $this.net.sendPing()
+        }, Math.max(200, $this.net.ping))
       }
     }
 
     this.net.registerNetEvents(this.netEvents).init().send('gameJoin',{});
   }
 
-  logic (delta) {
-    const vInc = ACCEL * delta
+  updatePlayer(player, targetTimestamp){
+
+    console.log("UPD_PLAYER=>",player)
+    // dead reckoning
+    const { x, y, vx, vy, ax, ay } = player
+
+    //console.log(player);
+    //console.log("DEAD_RECO: ",x,y,vx,vy,ax,ay);
+
+    const delta = targetTimestamp - player.timestamp
+    const delta2 = Math.pow(delta, 2)
+
+    player.x = x + (vx * delta) + (ax * delta2 / 2)
+    player.y = y + (vy * delta) + (ay * delta2 / 2)
+    player.vx = vx + (ax * delta)
+    player.vy = vy + (ay * delta)
+    player.timestamp = targetTimestamp
+
+  }
+
+
+  logic () {
+
+    const now = Date.now()
+    const serverNow = now + this.clockDiff
+    this.updateInputs()
+
     for (let playerId in this.players) {
       const player = this.players[playerId]
-      const { inputs } = player
-      if (inputs.LEFT_ARROW) player.vx -= vInc
-      if (inputs.RIGHT_ARROW) player.vx += vInc
-      if (inputs.UP_ARROW) player.vy -= vInc
-      if (inputs.DOWN_ARROW) player.vy += vInc
-
-      player.x += player.vx * delta
-      player.y += player.vy * delta
+      this.updatePlayer(player, serverNow)
     }
+
   }
 
   gameRenderer () {
+
+    // 1. First, clear canvas
     this.gfx.fillStyle = 'white'
     this.gfx.fillRect(0, 0, window.innerWidth, window.innerHeight)
 
-    // Iterate over items
+    // 2. Center the Camera to me
+    let myPlayer = this.players[this.myPlayerId];
+    //console.log("MY_PLAYER: ", myPlayer);
+    this.camera.focusOn(myPlayer);
 
+    // 3. Render the World
+
+    // Draw World graphic
+    this.gfx.beginPath();
+    this.gfx.moveTo(0,-2000);
+    this.gfx.lineTo(0,2000);
+    this.gfx.stroke();
+    this.gfx.closePath();
+
+    this.gfx.beginPath();
+    this.gfx.moveTo(-2000,0);
+    this.gfx.lineTo(2000,0);
+
+    // Stroke world graphic lines
+    this.gfx.stroke();
+    this.gfx.closePath();
+
+    for(let x = -2000;x<2000;x+=50){
+
+        this.gfx.beginPath();
+        this.gfx.moveTo(x,-5)
+        this.gfx.lineTo(x,5);
+        this.gfx.stroke();
+        this.gfx.closePath();
+        this.gfx.fillText(x,x,15);
+    }
+
+    for(let y = -2000;y<2000;y+=50){
+
+        this.gfx.beginPath();
+        this.gfx.moveTo(-5,y)
+        this.gfx.lineTo(5,y);
+        this.gfx.stroke();
+        this.gfx.closePath();
+        //this.gfx.textAlign = "center"
+        this.gfx.fillText(y,5,y);
+    }
+
+    // 4. Render world objects
+
+    // Iterate over items
     for (let itemId in this.items) {
       let item = this.projectiles[itemId]
       item.render()
     }
 
     // Iterate over projectiles
-
     for (let projectileId in this.projectiles) {
       let projectile = this.projectiles[projectileId]
       projectile.render()
@@ -506,8 +579,11 @@ class GameClient {
       this.gfx.restore() */
     }
 
+    // 5. Restore the Camera (so return to origin canvas)
+    this.camera.restoreFocus();
+
     // Render my pos
-    let myPlayer = this.players[this.myPlayerId];
+    
     if(myPlayer){
       Render.save();
       Render.font = '12px arial';
@@ -520,7 +596,7 @@ class GameClient {
     }
   }
 
-  updateInputs () {
+  updateInputs () { 
     const oldInputs = Object.assign({}, this.myInputs)
 
     for (let key in this.myInputs) {
@@ -533,20 +609,21 @@ class GameClient {
       // update our local player' inputs aproximately when the server
       // takes them into account
       const frozenInputs = Object.assign({}, this.myInputs)
-      setTimeout(function () {
+      setTimeout(() => {
         const myPlayer = this.players[this.myPlayerId]
+        const now = Date.now()
+        const serverNow = now + this.clockDiff
+        this.updatePlayer(myPlayer, serverNow)
         myPlayer.inputs = frozenInputs
-      }.bind(this), this.net.ping)
+        utils.calculatePlayerAcceleration(myPlayer)
+      }, this.net.ping)
     }
   }
 
   gameLoop () {
     requestAnimationFrame(this.gameLoop.bind(this));
-    const now = Date.now()
-    const delta = now - this.lastLogic
-    this.lastLogic = now
     this.updateInputs()
-    this.logic(delta)
+    this.logic()
     this.gameRenderer()
   }
 
@@ -558,7 +635,7 @@ class GameClient {
 
 module.exports = GameClient
 
-},{"./gameCamera":8,"./globals":11,"./net":12,"./render":16,"./tank":19,"@dasilvacontin/keyboard":1,"deep-equal":2}],10:[function(require,module,exports){
+},{"./gameCamera":8,"./globals":11,"./net":12,"./render":16,"./tank":19,"./utils":20,"@dasilvacontin/keyboard":1,"deep-equal":2}],10:[function(require,module,exports){
 const Renderable = require('./renderable')
 /**
  * Represents a in-game object in 2D. Has a x,y width and height
@@ -752,12 +829,13 @@ module.exports = globals
 class Network {
 
   constructor (socketIO,isClient=false) {
-    this.ping = 0
+    this.ping = Infinity
     this.isClient = isClient // If false => Server else Client
     this.io = !isClient ? socketIO : null
     this.socket = isClient ? socketIO : null
     this.id = isClient ? this.socket.id : null
     this.lastPingTimestamp = 0
+    this.pingMessageTimestamp = 0;
     this.PING_HANDSHAKE_INTERVAL = 250
     this.clients = !isClient ? {} : null;
     this.events = {};
@@ -778,6 +856,13 @@ class Network {
     return this.ping
   }
 
+  sendPing(){
+    if(this.isClient){
+      this.pingMessageTimestamp = Date.now()
+      this.socket.emit("game:ping",{});
+    }
+    return this;
+  }
   // Register new event to all clients (if we are server) or to us (if we are a client)
   listen (evnt, callback) {
 
@@ -825,9 +910,9 @@ class Network {
       this.socket = this.socket()
       $s = this.socket
     }
-    $s.on("connect",function($socket){
 
-      if(!$self.isClient){
+    if(!$self.isClient){
+      $s.on("connect",function($socket){
         console.log('A client has connected with ID: '+$socket.id);
         $self.clients[$socket.id] = $socket;
 
@@ -839,20 +924,18 @@ class Network {
             $socket.on(ev,$self.events[ev]);
           }
         }
-      }else{
-        // Register the client network events
-        console.info('We have connected to the server successfully!')
-        for(let ev in $self.events){
+      })
+    }else{
+      // Register the client network events
+      //console.info('We have connected to the server successfully!')
+      for(let ev in $self.events){
 
-          if($self.events.hasOwnProperty(ev)){
+        if($self.events.hasOwnProperty(ev)){
 
-            $s.on(ev,$self.events[ev]);
-          }
+          $s.on(ev,$self.events[ev]);
         }
       }
-        
-
-    })
+    }
 
     return this
   }
@@ -882,11 +965,11 @@ const GameObject = require('./gameObject')
  */
 class Player extends GameObject {
 
-    constructor(id,x,y,width,height,radius){
+    constructor(id,x,y,width,height,radius,timestamp){
         super(id,x,y,width,height,radius)
         this.inputs = {}
-        this.color
-        this.timestamp = 0
+        this.color = ""
+        this.timestamp = 0 || timestamp
     }
 }
 
@@ -903,12 +986,14 @@ class Point extends Renderable
   }
 
   render (size, color) {
+    this.gfx.save();
     this.gfx.beginPath()
     this.gfx.arc(this.x, this.y, size, 0, 2 * Math.PI, true)
     this.gfx.fillStyle = color
     this.gfx.fill()
     this.gfx.strokeStyle = color
     this.gfx.stroke()
+    this.gfx.restore();
   };
 };
 
@@ -996,10 +1081,20 @@ class Render {
      */
   constructor (canvasContext) {
     this.gfx = canvasContext
+    
+    if(!globals.getGlobal("SERVER")){
+
+      this.layers = {
+        world: {},
+        camera: {},
+        objects:  {}
+      } // The layers to identify where the object, world or a camera must be added to be controlled
+
+    }
   }
 }
 
-console.log("GLOBALS_OBJ: ",globals);
+console.log("GLOBALS_OBJ: ",globals)
 let render = null;
 if(!globals.getGlobal("SERVER")){
   render = new Render(globals.getGlobal('canvas').getContext('2d'))
@@ -1009,6 +1104,7 @@ if(!globals.getGlobal("SERVER")){
 }
 },{"./globals":11}],17:[function(require,module,exports){
 const Render = require('./render') // Instance of GFX
+let globals = require('./globals');
 /**
  * A class that makes an object to be drawn with render method and some other functions.
  * @class Renderable
@@ -1029,12 +1125,13 @@ class Renderable {
 
     this.gfx = Render
   }
+
 }
 
 module.exports = Renderable
 
 
-},{"./render":16}],18:[function(require,module,exports){
+},{"./globals":11,"./render":16}],18:[function(require,module,exports){
 /* globals window */
 const globals = require("./globals");
 
@@ -1067,9 +1164,6 @@ class Segment extends Renderable
 
   render (width, color) {
     this.gfx.save()
-    let POS_W = - this.vecx/2
-    let POS_H = - this.vecy/2
-    this.gfx.translate(POS_W,POS_H);
     this.gfx.beginPath()
     this.gfx.lineWidth = width !== undefined && width !== null ? width : this.width
     this.gfx.moveTo(this.x, this.y)
@@ -1202,13 +1296,13 @@ const BaseProjectile = require('./baseProjectile')
 class Tank extends Player
 {
   constructor (o) {
-    super(o.id, o.x, o.y, o.width, o.height, o.radius)
+    super(o.id, o.x, o.y, o.width, o.height, o.radius, o.timestamp)
 
     this.health = o.health ? o.health : 100
     this.maxHealth = o.maxHealth ? o.maxHealth : 100
     this.died = false
 
-    this.healthBarOffset = 20
+    this.healthBarOffset = 30
     this.healthBar = new Segment(this.x, this.y - this.healthBarOffset, 40, 0, 5)
     this.maxHealthBarX = this.healthBar.vecx + 2
 
@@ -1221,15 +1315,19 @@ class Tank extends Player
 
     this.body = new Rectangle(this.x, this.y, this.width, this.height)
     this.turret = {
-      base: new Rectangle(this.x + this.width / 4, this.y + this.height / 4, this.width / 2, this.height / 2),
+      base: new Rectangle(this.x, this.y, this.width / 2, this.height / 2),
       canon: new Segment(this.x + this.width / 2, this.y + this.height / 2, 40, 0, 3),
       orientation: 0 // In degrees
     }
 
         // Speed X
-    this.sx = 0
+    this.vx = o.vx ? o.vx : 0
         // Speed y
-    this.sy = 0
+    this.vy = o.vy ? o.vy : 0
+
+    // Acceleration
+    this.ax = o.ax ? o.ax : 0
+    this.ay = o.ay ? o.ay : 0
 
     this.speed = 20 // Default speed
   }
@@ -1354,10 +1452,12 @@ class Tank extends Player
 
   render () {
       // Draw health bar
+    this.gfx.save();
     this.drawHealthBar()
 
     this.body.rotate(utils.degreeToRadian(this.orientation.degree))
 
+    this.gfx.translate(-this.turret.base.width/2,-this.turret.base.height/2)
     if (this.turret.orientation !== 0 && this.turret.orientation !== 360) {
       var rad = utils.degreeToRadian(this.turret.orientation)
       this.turret.base.rotate(rad)
@@ -1366,7 +1466,10 @@ class Tank extends Player
       this.turret.base.render('#f00')
     }
 
+    this.gfx.translate(-this.turret.base.width/2,-this.turret.base.height/2)
     this.turret.canon.render(null, '#f00')
+    this.gfx.restore()
+    this.gfx.restore();
 
     return this
   };
@@ -1378,8 +1481,9 @@ class Tank extends Player
     this.gfx.translate(POS_W,POS_H);
     this.gfx.fillStyle = 'black'
     this.gfx.fillRect(this.healthBar.x - 1, this.healthBar.y - 3, this.maxHealthBarX, this.healthBar.width + 1)
-    this.gfx.restore()
+
     this.healthBar.render(4, 'red')
+    this.gfx.restore()
     return this
   };
 
@@ -1388,6 +1492,8 @@ class Tank extends Player
 module.exports = Tank
 
 },{"./baseProjectile":5,"./player":13,"./rectangle":15,"./segment":18,"./utils":20}],20:[function(require,module,exports){
+let globals = require("./globals")
+let ACCEL = globals.getGlobal("ACCEL");
 module.exports = {
 
   degreeToRadian (d) {
@@ -1396,11 +1502,25 @@ module.exports = {
 
   radianToDegree (r) {
     return 180 * r / Math.PI
+  },
+
+  calculatePlayerAcceleration(player){
+
+    const { inputs } = player
+    let ax = 0
+    let ay = 0
+    if (inputs.LEFT_ARROW) ax -= ACCEL
+    if (inputs.RIGHT_ARROW) ax += ACCEL
+    if (inputs.UP_ARROW) ay -= ACCEL
+    if (inputs.DOWN_ARROW) ay += ACCEL
+
+    player.ax = ax
+    player.ay = ay
   }
 
 }
 
-},{}],21:[function(require,module,exports){
+},{"./globals":11}],21:[function(require,module,exports){
 const Renderable = require('./renderable')
 class Vector extends Renderable
 {
@@ -1411,12 +1531,14 @@ class Vector extends Renderable
   }
 
   render (size, color) {
+    this.gfx.save()
     this.gfx.beginPath()
     this.gfx.arc(this.x, this.y, size, 0, 2 * Math.PI, true)
     this.gfx.fillStyle = color
     this.gfx.fill()
     this.gfx.strokeStyle = color
     this.gfx.stroke()
+    this.gfx.restore()
   };
 
   add (vector) {

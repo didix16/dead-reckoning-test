@@ -1,12 +1,15 @@
 const globals = require('./globals')
-// const utils = require("./utils");
-globals.addGlobal("SERVER",true);
+globals.addGlobal('ACCEL', 1 / 1000)
+globals.addGlobal("SERVER",true)
+
+const utils = require("./utils")
+
 const randomColor = require('randomcolor')
 const Network = require('./net')
 const Tank = require("./tank");
 
-globals.addGlobal('ACCEL', 1 / 1000)
-const ACCEL = globals.getGlobal('ACCEL')
+
+
 class GameServer {
 
   constructor (socketIO) {
@@ -31,10 +34,6 @@ class GameServer {
     this.netEvents = {
       'game:ping': function () {
         this.emit('game:pong', Date.now())
-      },
-
-      'game:pung': function () {
-                // ping = (Date.now() - lastPongTimestamp) / 2
       },
 
       gameJoin: function(){
@@ -72,6 +71,9 @@ class GameServer {
           radius: 30,
           vx: 0,
           vy: 0,
+          ax: 0,
+          ay: 0,
+          timestamp: Date.now(),
           color: randomColor(),
           id: socket.id,
           score: 0,
@@ -79,7 +81,7 @@ class GameServer {
           inputs
         });
 
-        console.log('Generated PLAYER=>',player);
+        //console.log('Generated PLAYER=>',player);
 
         $this.players[socket.id] = player
 
@@ -97,10 +99,16 @@ class GameServer {
       onPlayerMoved (socket, inputs) {
         console.log(inputs)
         console.log(`${new Date()}: ${socket.id} moved`)
+
         const player = $this.players[socket.id]
-        player.timestamp = Date.now()
+        const now = Date.now()
+        $this.updatePlayer(player, now)
+
         player.inputs = inputs
-       socket.emit('playerMoved', player)
+        utils.calculatePlayerAcceleration(player)
+
+        //console.log("PLAYER_NEW_ACC", player);
+        socket.emit('playerMoved', player)
       },
 
       onPlayerDisconnected (socket) {
@@ -114,31 +122,49 @@ class GameServer {
     this.net.registerNetEvents(this.netEvents).init();
   }
 
-  logic (delta) {
-    const vInc = ACCEL * delta
+  updatePlayer(player, targetTimestamp){
+
+    const { x, y, vx, vy, ax, ay } = player
+
+    console.log('UPDT_PLAYER==>', x,y,vx,vy,ax,ay);
+    //throw new Error("STOP");
+
+    const delta = targetTimestamp - player.timestamp
+    const delta2 = Math.pow(delta, 2)
+
+    player.x = x + (vx * delta) + (ax * delta2 / 2)
+    player.y = y + (vy * delta) + (ay * delta2 / 2)
+    player.vx = vx + (ax * delta)
+    player.vy = vy + (ay * delta)
+    player.timestamp = targetTimestamp
+
+    return this
+  }
+
+  logic () {
+    
+    const now = Date.now()
 
     for (let playerId in this.players) {
       const player = this.players[playerId]
-      const { inputs } = player
-      if (inputs.LEFT_ARROW) player.vx -= vInc
-      if (inputs.RIGHT_ARROW) player.vx += vInc
-      if (inputs.UP_ARROW) player.vy -= vInc
-      if (inputs.DOWN_ARROW) player.vy += vInc
+      console.log(playerId, player)
+      this.updatePlayer(player, now)
 
-      player.x += player.vx * delta
-      player.y += player.vy * delta
-
-      // Add here projectile collision and item collision
-      /* for (let itemId in this.items) {
-        const item = this.items[itemId]
-        const dist = Math.abs(player.x - item.x) + Math.abs(player.y - item.y)
-
-        //Add collision here
-
-      } */
-
-      //this.itemSpawner()
+      // player <-> items collision detection
+      /*for (let coinId in this.coins) {
+        const coin = this.coins[coinId]
+        const dist = Math.abs(player.x - coin.x) + Math.abs(player.y - coin.y)
+        const radiusSum = COIN_RADIUS + (PLAYER_EDGE / 2)
+        if (radiusSum > dist) {
+          delete this.coins[coinId]
+          player.score++
+          this.io.to(this.roomId).emit('coinCollected', player.id, coinId)
+        }
+      }*/
     }
+
+    //this.itemSpawner()
+
   }
 
   itemSpawner () {
@@ -158,13 +184,9 @@ class GameServer {
 
   run (loopInterval) {
     console.log('Starting GameServer...')
-    this.past = Date.now()
 
     setInterval(function () {
-      const now = Date.now()
-      const delta = now - this.past
-      this.past = now
-      this.logic(delta)
+      this.logic()
     }.bind(this), loopInterval)
   }
 }

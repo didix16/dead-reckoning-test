@@ -8,12 +8,13 @@
 class Network {
 
   constructor (socketIO,isClient=false) {
-    this.ping = 0
+    this.ping = Infinity
     this.isClient = isClient // If false => Server else Client
     this.io = !isClient ? socketIO : null
     this.socket = isClient ? socketIO : null
     this.id = isClient ? this.socket.id : null
     this.lastPingTimestamp = 0
+    this.pingMessageTimestamp = 0;
     this.PING_HANDSHAKE_INTERVAL = 250
     this.clients = !isClient ? {} : null;
     this.events = {};
@@ -34,6 +35,13 @@ class Network {
     return this.ping
   }
 
+  sendPing(){
+    if(this.isClient){
+      this.pingMessageTimestamp = Date.now()
+      this.socket.emit("game:ping",{});
+    }
+    return this;
+  }
   // Register new event to all clients (if we are server) or to us (if we are a client)
   listen (evnt, callback) {
 
@@ -81,9 +89,9 @@ class Network {
       this.socket = this.socket()
       $s = this.socket
     }
-    $s.on("connect",function($socket){
 
-      if(!$self.isClient){
+    if(!$self.isClient){
+      $s.on("connect",function($socket){
         console.log('A client has connected with ID: '+$socket.id);
         $self.clients[$socket.id] = $socket;
 
@@ -95,20 +103,18 @@ class Network {
             $socket.on(ev,$self.events[ev]);
           }
         }
-      }else{
-        // Register the client network events
-        console.info('We have connected to the server successfully!')
-        for(let ev in $self.events){
+      })
+    }else{
+      // Register the client network events
+      //console.info('We have connected to the server successfully!')
+      for(let ev in $self.events){
 
-          if($self.events.hasOwnProperty(ev)){
+        if($self.events.hasOwnProperty(ev)){
 
-            $s.on(ev,$self.events[ev]);
-          }
+          $s.on(ev,$self.events[ev]);
         }
       }
-        
-
-    })
+    }
 
     return this
   }

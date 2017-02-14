@@ -7,13 +7,13 @@ const BaseProjectile = require('./baseProjectile')
 class Tank extends Player
 {
   constructor (o) {
-    super(o.id, o.x, o.y, o.width, o.height, o.radius)
+    super(o.id, o.x, o.y, o.width, o.height, o.radius, o.timestamp)
 
     this.health = o.health ? o.health : 100
     this.maxHealth = o.maxHealth ? o.maxHealth : 100
     this.died = false
 
-    this.healthBarOffset = 20
+    this.healthBarOffset = 30
     this.healthBar = new Segment(this.x, this.y - this.healthBarOffset, 40, 0, 5)
     this.maxHealthBarX = this.healthBar.vecx + 2
 
@@ -26,15 +26,19 @@ class Tank extends Player
 
     this.body = new Rectangle(this.x, this.y, this.width, this.height)
     this.turret = {
-      base: new Rectangle(this.x + this.width / 4, this.y + this.height / 4, this.width / 2, this.height / 2),
+      base: new Rectangle(this.x, this.y, this.width / 2, this.height / 2),
       canon: new Segment(this.x + this.width / 2, this.y + this.height / 2, 40, 0, 3),
       orientation: 0 // In degrees
     }
 
         // Speed X
-    this.sx = 0
+    this.vx = o.vx ? o.vx : 0
         // Speed y
-    this.sy = 0
+    this.vy = o.vy ? o.vy : 0
+
+    // Acceleration
+    this.ax = o.ax ? o.ax : 0
+    this.ay = o.ay ? o.ay : 0
 
     this.speed = 20 // Default speed
   }
@@ -159,10 +163,12 @@ class Tank extends Player
 
   render () {
       // Draw health bar
+    this.gfx.save();
     this.drawHealthBar()
 
     this.body.rotate(utils.degreeToRadian(this.orientation.degree))
 
+    this.gfx.translate(-this.turret.base.width/2,-this.turret.base.height/2)
     if (this.turret.orientation !== 0 && this.turret.orientation !== 360) {
       var rad = utils.degreeToRadian(this.turret.orientation)
       this.turret.base.rotate(rad)
@@ -171,7 +177,10 @@ class Tank extends Player
       this.turret.base.render('#f00')
     }
 
+    this.gfx.translate(-this.turret.base.width/2,-this.turret.base.height/2)
     this.turret.canon.render(null, '#f00')
+    this.gfx.restore()
+    this.gfx.restore();
 
     return this
   };
@@ -183,8 +192,9 @@ class Tank extends Player
     this.gfx.translate(POS_W,POS_H);
     this.gfx.fillStyle = 'black'
     this.gfx.fillRect(this.healthBar.x - 1, this.healthBar.y - 3, this.maxHealthBarX, this.healthBar.width + 1)
-    this.gfx.restore()
+
     this.healthBar.render(4, 'red')
+    this.gfx.restore()
     return this
   };
 
