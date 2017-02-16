@@ -59,6 +59,9 @@ class Network {
   }
 
   send (evnt, objectData) {
+    arguments.splice(0,1)
+    if(objectData.constructor !== Object ) objectData = arguments
+
     if(this.isClient){
       this.socket.emit(evnt, objectData)
     }else{

@@ -7,6 +7,7 @@ const utils = require("./utils")
 const randomColor = require('randomcolor')
 const Network = require('./net')
 const Tank = require("./tank");
+const BaseItem = require('./baseItem')
 const HealthItem = require('./healthItem')
 
 
@@ -232,16 +233,20 @@ class GameServer {
       this.updatePlayer(player, now)
 
       // player <-> items collision detection
-      /*for (let coinId in this.coins) {
-        const coin = this.coins[coinId]
-        const dist = Math.abs(player.x - coin.x) + Math.abs(player.y - coin.y)
-        const radiusSum = COIN_RADIUS + (PLAYER_EDGE / 2)
+      for (let itemId in this.items) {
+        const item = this.items[itemId]
+        const dist = Math.abs(player.x - item.x) + Math.abs(player.y - item.y)
+        const radiusSum = item.radius + player.radius
         if (radiusSum > dist) {
-          delete this.coins[coinId]
-          player.score++
-          this.io.to(this.roomId).emit('coinCollected', player.id, coinId)
+          if(item.getType() === BaseItem.TYPE.HEALTH){
+            let hp = item.use()
+            player.heal(hp);
+          }
+          delete this.item[itemId]
+          //player.score++
+          this.net.send('itemCollected', player.id, itemId)
         }
-      }*/
+      }
     }
 
     for( let projId in this.projectiles) {
@@ -249,6 +254,8 @@ class GameServer {
       const projectile = this.projectiles[projId]
 
       this.updateProjectile(projectile,now)
+
+      // check here for collision
     }
 
     this.itemSpawner()

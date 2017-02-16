@@ -1,6 +1,6 @@
 const GameObject = require('./gameObject')
 /**
- * A camera that foucus the scene in some part of the game world
+ * A camera that foucus the scene in some part of the game world or to a game object
  * @public
  * @param {integer} x - GameCamera x coordinate position
  * @param {integer} y - GameCamera y coordinate position
