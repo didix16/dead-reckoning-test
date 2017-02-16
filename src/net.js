@@ -59,14 +59,17 @@ class Network {
   }
 
   send (evnt, objectData) {
-    arguments.splice(0,1)
-    if(objectData.constructor !== Object ) objectData = arguments
+
+    let args = Array.from(arguments)
+    args.splice(0,1)
+
+    if(objectData.constructor !== Object ) objectData = args
 
     if(this.isClient){
-      this.socket.emit(evnt, objectData)
+      this.socket.emit.apply(this.socket,[evnt].concat(args))
     }else{
 
-      this.broadcast(evnt,objectData)
+      this.broadcast.apply(this,[evnt].concat(args))
     }
     return this
   }
@@ -74,7 +77,12 @@ class Network {
   // Like send but server broadcast to all
   broadcast(evnt,objectData){
 
-    this.io.sockets.emit(evnt,objectData)
+    let args = Array.from(arguments)
+    args.splice(0,1)
+
+    if(objectData.constructor !== Object ) objectData = args
+
+    this.io.sockets.emit.apply(this.io.sockets,[evnt].concat(args))
     return this
   }
 

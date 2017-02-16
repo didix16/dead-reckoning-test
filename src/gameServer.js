@@ -1,14 +1,16 @@
 const globals = require('./globals')
 globals.addGlobal('ACCEL', 1 / 1000)
 globals.addGlobal("SERVER",true)
+const ACCEL = globals.getGlobal("ACCEL");
 
 const utils = require("./utils")
 
 const randomColor = require('randomcolor')
 const Network = require('./net')
 const Tank = require("./tank");
-const BaseItem = require('./baseItem')
+let BaseItem = require('./baseItem')
 const HealthItem = require('./healthItem')
+const AmmoItem = require('./ammoItem')
 
 
 
@@ -87,6 +89,7 @@ class GameServer {
           x: Math.random() * 500,
           y: Math.random() * 500,
           width: 50,
+          nickname: "Player - "+Object.keys($this.players).length,
           height: 50,
           radius: 30,
           vx: 0,
@@ -118,9 +121,21 @@ class GameServer {
 
       onPlayerMoved (socket, inputs) {
         //console.log(inputs)
+        if(!inputs) return // Avoid invalid inputs
+        const player = $this.players[socket.id]
+        if(!player){
+          socket.disconnect(true)
+          return
+        }
+
+        if(player.died){
+          socket.emit("NoMove:Dead",{});
+          return
+        }
         console.log(`${new Date()}: ${socket.id} moved`)
 
-        const player = $this.players[socket.id]
+        
+        
         const now = Date.now()
         $this.updatePlayer(player, now)
 
@@ -157,6 +172,11 @@ class GameServer {
         const now = Date.now()
         $this.updatePlayer(player, now)
 
+        if(!player){
+
+          socket.disconnect(true)
+          return
+        }
         player.inputs = inputs
 
         if(player.ammo > 0 && player.inputs.SPACE_BAR){
@@ -190,8 +210,8 @@ class GameServer {
 
   updatePlayer(player, targetTimestamp){
 
-    if(!player) return // Avoid null player (In some cases here arrives a null :S)
-    const { x, y, vx, vy, ax, ay } = player
+    if(!player || player.died) return // Avoid null player (In some cases here arrives a null :S) or player dead
+    let { x, y, vx, vy, ax, ay, vxDir, vyDir } = player
 
     //console.log('UPDT_PLAYER==>', x,y,vx,vy,ax,ay);
     //throw new Error("STOP");
@@ -203,6 +223,8 @@ class GameServer {
     player.y = y + (vy * delta) + (ay * delta2 / 2)
     player.vx = vx + (ax * delta)
     player.vy = vy + (ay * delta)
+
+
     player.timestamp = targetTimestamp
     player.move();
 
@@ -216,6 +238,7 @@ class GameServer {
 
     projectile.x += direction.x * speed * delta;
     projectile.y += direction.y * speed * delta;
+    projectile.distance += direction.x * speed * delta;
 
     //console.log("UP_PROJECT==>",direction,speed,delta, projectile.x);
 
@@ -241,22 +264,50 @@ class GameServer {
           if(item.getType() === BaseItem.TYPE.HEALTH){
             let hp = item.use()
             player.heal(hp);
+          }else if(item.getType() === BaseItem.TYPE.AMMO){
+            let ammo = item.use()
+            player.chargeAmmo(ammo);
           }
-          delete this.item[itemId]
+          delete this.items[itemId]
           //player.score++
           this.net.send('itemCollected', player.id, itemId)
         }
       }
+
+      for( let projId in this.projectiles) {
+
+        const projectile = this.projectiles[projId]
+
+        this.updateProjectile(projectile,now)
+        if(projectile.distance > projectile.MAX_DISTANCE){
+          this.net.send('projectileExplode',projId)
+          delete this.projectiles[projId];
+          continue;
+        }
+
+        if(playerId != projectile.owner){
+          // check here for collision
+          const dist = Math.abs(player.x - projectile.x) + Math.abs(player.y - projectile.y)
+          const radiusSum = projectile.radius + player.radius
+          if (radiusSum > dist) {
+            
+            let alive = player.setHealth(player.health-projectile.dammage)
+            if(alive){
+              console.log("Player hurt!")
+              this.net.send('playerHurt',player, projectile)
+            }else{
+               console.log("Player died!")
+              this.net.send('playerDead',player,projectile)
+            }
+            delete this.projectiles[projId];
+          }
+        }
+          
+      }
+
     }
 
-    for( let projId in this.projectiles) {
-
-      const projectile = this.projectiles[projId]
-
-      this.updateProjectile(projectile,now)
-
-      // check here for collision
-    }
+    
 
     this.itemSpawner()
 
@@ -265,18 +316,39 @@ class GameServer {
   itemSpawner () {
     // Item spawner
     let now = Date.now();
-    if ( now - this.lastItemSpawn > 5000) {
+    if ( now - this.lastItemSpawn > 10000) {
       
-      const item = new HealthItem({
-        id: this.nextItemId,
-        x: 0 ,
-        y: 0,
-        width: 16,
-        height: 16,
-        radius: 16,
-        timestamp: now
+      let type = Math.floor(Math.random() * 2)
+      let item = null;
+      switch(type){
+        case 0:
+          item = new HealthItem({
+            id: this.nextItemId,
+            x: 0 ,
+            y: 0,
+            width: 16,
+            height: 16,
+            radius: 16,
+            timestamp: now
 
-      });
+          });
+          break;
+        case 1:
+          item = new AmmoItem({
+            id: this.nextItemId,
+            x: 0 ,
+            y: 0,
+            width: 16,
+            height: 16,
+            radius: 16,
+            timestamp: now
+
+          });
+          break;
+        default:
+          return
+      }
+      
 
       item.spawnAt(Math.floor(Math.random() * 2000) - 1000,Math.floor(Math.random() * 2000) - 1000);
 

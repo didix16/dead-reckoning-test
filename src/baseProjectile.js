@@ -6,7 +6,7 @@ class BaseProjectile extends GameObject
   constructor (o) {
     super(o.id, o.x, o.y, o.width, o.height, o.radius)
 
-    this.owner = 0 // player id
+    this.owner = o.owner || 0 // player id
 
     this.body = new Circle(this.x, this.y, this.radius)
     this.dammage = o.damage
@@ -28,6 +28,10 @@ class BaseProjectile extends GameObject
         }; */
 
     this.speed = o.speed || 0.0
+
+    // The distance since was fired
+    this.distance = o.distance || 0
+    this.MAX_DISTANCE = 1000
   }
 
   getId () {

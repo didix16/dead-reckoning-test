@@ -9,13 +9,15 @@ const BaseProjectile = require('./baseProjectile')
 class Tank extends Player
 {
   constructor (o) {
-    super(o.id, o.x, o.y, o.width, o.height, o.radius, o.timestamp)
+    super(o.id, o.x, o.y, o.width, o.height, o.radius, o.timestamp,o.nickname)
 
     this.health = o.health ? o.health : 100
     this.maxHealth = o.maxHealth ? o.maxHealth : 100
-    this.died = false
+    this.died = o.died || false
     this.ammo = o.ammo !== undefined ? o.ammo : 10
     this.maxAmmo = o.maxAmmo || 10
+    this.defense = o.defense || 0
+    this.carryFlag = o.carryFlag || false
     this.color = o.color;
 
     this.healthBarOffset = 30
@@ -46,11 +48,15 @@ class Tank extends Player
         // Speed y
     this.vy = o.vy ? o.vy : 0
 
+    // Speed vector direction
+    this.vxDir = o.vxDir || 0; // -1 = left; +1 = right
+    this.vyDir = o.vyDir || 0; // -1 = up; +1 = down
+
     // Acceleration
     this.ax = o.ax ? o.ax : 0
     this.ay = o.ay ? o.ay : 0
 
-    this.speed = 20 // Default speed
+    this.maxSpeed = o.maxSpeed || 5 // Default speed
   }
 
   getId () {
@@ -137,7 +143,7 @@ class Tank extends Player
       width: this.turret.canon.width,
       height: this.turret.canon.width,
       radius: this.turret.canon.width,
-      damage: 20,
+      damage: 5,
       speed: strenght
 
     })
@@ -158,19 +164,32 @@ class Tank extends Player
     this.health = health
     if (this.health > this.maxHealth) this.health = this.maxHealth
     else if (this.health <= 0) {
-      this.died = 0
+      this.died = true
       this.health = 0
     }
 
     var width = this.health * (this.maxHealthBarX - 2) / this.maxHealth
     this.healthBar.vecx = width
+    return this.died;
   }
 
   heal (amountHealth) {
     if (Number.isInteger(parseInt(amountHealth))) {
-      this.setHealth(this.health + amountHealth)
+      if(!this.died)
+        this.setHealth(this.health + amountHealth)
     } else {
       console.error('Tank::heal: Invalid amountHealth')
+    }
+
+    return this
+  };
+
+  chargeAmmo(amountAmmo){
+    if (Number.isInteger(parseInt(amountAmmo))) {
+      this.ammo = this.ammo + amountAmmo;
+      if(this.ammo > this.maxAmmo) this.ammo = this.maxAmmo
+    } else {
+      console.error('Tank::chargeAmmo: Invalid amountAmmo')
     }
 
     return this
@@ -202,6 +221,7 @@ class Tank extends Player
     
     //this.gfx.translate(this.turret.base.width,this.turret.base.height)
     this.turret.canon.render(null, this.color)
+    this.gfx.translate(this.turret.base.width,this.turret.base.height)
 
     return this
   };
@@ -209,6 +229,18 @@ class Tank extends Player
   drawHealthBar () {
     this.gfx.save()
     let POS_W = (-this.maxHealthBarX+2)/2;
+    /*if(this.carryFlag){
+
+      this.gfx.save()
+      this.gfx.translate(POS_W-20,0);
+      this.gfx.font = "12px FontAwesome";
+      this.gfx.fillStyle = "#FF0000"
+      this.gfx.fillText('\uf024', this.healthBar.x +1,this.healthBar.y);
+      this.gfx.strokeStyle = "#000000"
+      this.gfx.strokeText('\uf024', this.healthBar.x +1,this.healthBar.y );
+      this.gfx.restore();
+
+    }*/
     this.gfx.translate(POS_W,0);
     this.gfx.fillStyle = 'black'
     this.gfx.fillRect(this.healthBar.x - 1, this.healthBar.y - 3, this.maxHealthBarX, this.healthBar.width + 1)

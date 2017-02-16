@@ -1,6 +1,7 @@
 let GameObject = require('./gameObject')
 class BaseItem extends GameObject
 {   
+
     constructor(o){
         super(o.id,o.x,o.y,o.width,o.height,o.radius)
         this.owner = null;
@@ -9,25 +10,9 @@ class BaseItem extends GameObject
         this.body = null;
 
         // Constants that represent what kind of item is
-        this.TYPE = {
-
-            JOKE: -1, // Means on pickup can explode and substract health
-            HEALTH: 0,
-            AMMO: 1, // Example: Missiles
-            TRAP: 2, // Example, can be a IA Turret, Mine, etc..
-            WEAPON: 3 // Not implemented yet
-        };
+        
 
         this.type = -1; // By default JOKE
-
-        // Constants that represent what kind of effect makes the item
-        this.EFFECT = {
-            NONE: -1,
-            HEALTH: 0,
-            CHARGE_AMMO: 1,
-            DAMAGE: 2
-
-        };
 
         this.effect = -1; // By default nothing
 
@@ -47,7 +32,7 @@ class BaseItem extends GameObject
 		this.type = t;
 
 		// Makes the item usable if the type of item is a trap
-		if(this.type == this.TYPE.TRAP) this.usable = true;
+		if(this.type == BaseItem.TYPE.TRAP) this.usable = true;
 		return this;
 	};
 
@@ -97,5 +82,26 @@ class BaseItem extends GameObject
 	};
 
 }
+
+// Static variables
+BaseItem.TYPE = {
+
+	JOKE: -1, // Means on pickup can explode and substract health
+	HEALTH: 0,
+	AMMO: 1, // Example: Missiles
+	TRAP: 2, // Example, can be a IA Turret, Mine, etc..
+	WEAPON: 3, // Not implemented yet
+	FLAG: 4 // For CTF
+};
+
+// Constants that represent what kind of effect makes the item
+BaseItem.EFFECT = {
+	NONE: -1,
+	HEALTH: 0,
+	CHARGE_AMMO: 1,
+	DAMAGE: 2,
+	BONUS: 3
+
+};
 
 module.exports = BaseItem

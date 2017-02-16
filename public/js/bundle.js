@@ -177,9 +177,57 @@ function shim (obj) {
 }
 
 },{}],5:[function(require,module,exports){
+let BaseItem = require('./baseItem')
+let Rectangle = require('./rectangle')
+class AmmoItem extends BaseItem
+{
+
+	constructor(o){
+
+        super(o);
+        this.setType(BaseItem.TYPE.AMMO);
+        this.effect = BaseItem.EFFECT.CHARGE_AMMO;
+
+        this.owner = o.owner || null;
+        this.body = new Rectangle(o.x || 0,o.y || 0,this.width,this.height);
+        this.usable = true;
+        this.used = o.used || false
+        this.timestamp = o.timestamp || this.timestamp
+
+    }
+
+    // At the moment allways return 5, means the ammo to be restored
+    use(){
+
+        this.used = true;
+        return 5;
+    }
+
+	render(){
+		
+        
+		this.gfx.save();
+        
+        let POS_W = - this.width/2
+        let POS_H = - this.height/2
+        this.gfx.translate(POS_W,POS_H);
+        this.body.render("#966F33",true);
+		this.gfx.font = "12px FontAwesome";
+		this.gfx.fillStyle = "#000000";
+		this.gfx.fillText('\uf135',this.x-1+this.width/4 , this.y + this.height-12+this.height/2);
+		this.gfx.restore();
+
+		return this;
+	};
+
+}
+
+module.exports = AmmoItem
+},{"./baseItem":6,"./rectangle":20}],6:[function(require,module,exports){
 let GameObject = require('./gameObject')
 class BaseItem extends GameObject
 {   
+
     constructor(o){
         super(o.id,o.x,o.y,o.width,o.height,o.radius)
         this.owner = null;
@@ -188,25 +236,9 @@ class BaseItem extends GameObject
         this.body = null;
 
         // Constants that represent what kind of item is
-        this.TYPE = {
-
-            JOKE: -1, // Means on pickup can explode and substract health
-            HEALTH: 0,
-            AMMO: 1, // Example: Missiles
-            TRAP: 2, // Example, can be a IA Turret, Mine, etc..
-            WEAPON: 3 // Not implemented yet
-        };
+        
 
         this.type = -1; // By default JOKE
-
-        // Constants that represent what kind of effect makes the item
-        this.EFFECT = {
-            NONE: -1,
-            HEALTH: 0,
-            CHARGE_AMMO: 1,
-            DAMAGE: 2
-
-        };
 
         this.effect = -1; // By default nothing
 
@@ -226,7 +258,7 @@ class BaseItem extends GameObject
 		this.type = t;
 
 		// Makes the item usable if the type of item is a trap
-		if(this.type == this.TYPE.TRAP) this.usable = true;
+		if(this.type == BaseItem.TYPE.TRAP) this.usable = true;
 		return this;
 	};
 
@@ -277,8 +309,29 @@ class BaseItem extends GameObject
 
 }
 
+// Static variables
+BaseItem.TYPE = {
+
+	JOKE: -1, // Means on pickup can explode and substract health
+	HEALTH: 0,
+	AMMO: 1, // Example: Missiles
+	TRAP: 2, // Example, can be a IA Turret, Mine, etc..
+	WEAPON: 3, // Not implemented yet
+	FLAG: 4 // For CTF
+};
+
+// Constants that represent what kind of effect makes the item
+BaseItem.EFFECT = {
+	NONE: -1,
+	HEALTH: 0,
+	CHARGE_AMMO: 1,
+	DAMAGE: 2,
+	BONUS: 3
+
+};
+
 module.exports = BaseItem
-},{"./gameObject":11}],6:[function(require,module,exports){
+},{"./gameObject":12}],7:[function(require,module,exports){
 const GameObject = require('./gameObject')
 const Circle = require('./circle')
 class BaseProjectile extends GameObject
@@ -287,7 +340,7 @@ class BaseProjectile extends GameObject
   constructor (o) {
     super(o.id, o.x, o.y, o.width, o.height, o.radius)
 
-    this.owner = 0 // player id
+    this.owner = o.owner || 0 // player id
 
     this.body = new Circle(this.x, this.y, this.radius)
     this.dammage = o.damage
@@ -309,6 +362,10 @@ class BaseProjectile extends GameObject
         }; */
 
     this.speed = o.speed || 0.0
+
+    // The distance since was fired
+    this.distance = o.distance || 0
+    this.MAX_DISTANCE = 1000
   }
 
   getId () {
@@ -345,7 +402,7 @@ class BaseProjectile extends GameObject
 
 module.exports = BaseProjectile
 
-},{"./circle":7,"./gameObject":11}],7:[function(require,module,exports){
+},{"./circle":8,"./gameObject":12}],8:[function(require,module,exports){
 const Renderable = require('./renderable')
 class Circle extends Renderable
 {
@@ -378,7 +435,7 @@ class Circle extends Renderable
 
 module.exports = Circle
 
-},{"./renderable":21}],8:[function(require,module,exports){
+},{"./renderable":22}],9:[function(require,module,exports){
 /* globals io */
 
 // tool de test_ coverage && coverall
@@ -422,10 +479,10 @@ window.game = game
 
 game.run()
 
-},{"./gameClient":10,"./globals":12}],9:[function(require,module,exports){
+},{"./gameClient":11,"./globals":13}],10:[function(require,module,exports){
 const GameObject = require('./gameObject')
 /**
- * A camera that foucus the scene in some part of the game world
+ * A camera that foucus the scene in some part of the game world or to a game object
  * @public
  * @param {integer} x - GameCamera x coordinate position
  * @param {integer} y - GameCamera y coordinate position
@@ -474,16 +531,19 @@ class GameCamera extends GameObject {
 
 module.exports = GameCamera
 
-},{"./gameObject":11}],10:[function(require,module,exports){
+},{"./gameObject":12}],11:[function(require,module,exports){
 /* globals requestAnimationFrame, window, $  */
 let Render = require('./render')
 let Tank = require('./tank')
 let Projectile = require('./baseProjectile')
 let GameCamera = require('./gameCamera')
 let Map = require("./map");
-let HealthItem = require("./healthItem")
+let BaseItem = require('./baseItem')
+const HealthItem = require('./healthItem')
+const AmmoItem = require('./ammoItem')
 let globals = require('./globals')
 globals.addGlobal('ACCEL', 1 / 1000);
+const ACCEL = globals.getGlobal("ACCEL");
 
 let utils = require("./utils")
 let Network = require('./net')
@@ -562,11 +622,19 @@ class GameClient {
         $this.players = players
 
         var itemIds = Object.keys(data.serverItems)
-        let items = {}
         itemIds.forEach(function (itemId) {
-          items[itemId] = new HealthItem(data.serverItems[itemId])
-        })
-        $this.items = items;
+          let item = data.serverItems[itemId]
+          switch(item.type){
+
+            case BaseItem.TYPE.HEALTH:
+              $this.items[item.id] = new HealthItem(item);
+              break;
+            case BaseItem.TYPE.AMMO:
+              $this.items[item.id] = new AmmoItem(item);
+              break;
+          }
+
+        });
 
         var pIds = Object.keys(data.serverProjectiles)
         let projectiles = {}
@@ -609,14 +677,78 @@ class GameClient {
           alert.text("").removeClass("show fadeOut");
         });
         
-        $this.items[item.id] = new HealthItem(item);
+        switch(item.type){
+
+          case BaseItem.TYPE.HEALTH:
+            $this.items[item.id] = new HealthItem(item);
+            break;
+          case BaseItem.TYPE.AMMO:
+            $this.items[item.id] = new AmmoItem(item);
+            break;
+        }
+        
       },
 
       onItemCollected (playerId, itemId) {
+
+        let item = $this.items[itemId]
+        let player = $this.players[playerId]
+        switch(item.type){
+
+          case BaseItem.TYPE.HEALTH:
+            player.heal(item.use())
+            break;
+          case BaseItem.TYPE.AMMO:
+            player.chargeAmmo(item.use())
+            break;
+        }
         delete $this.items[itemId]
         // const player = $this.players[playerId]
         // Do the item effect
         // player.score++
+      },
+
+      onPlayerHurt(player, projectile){
+        alert("famae")
+        $this.players[player.id] = new Tank(player);
+        $this.players[player.id].setHealth(player.health)
+        delete $this.projectiles[projectile.id];
+      },
+
+      onPlayerDead(player, projectile){
+
+        let alert = $("div.alert");
+        alert.text(`You has been killed by [ ${$this.players[projectile.owner].nickname} ]!`);
+        alert.addClass("show")
+        setTimeout(() => {
+          alert.addClass("animated fadeOut");
+        },2000);
+        alert.one('webkitAnimationEnd mozAnimationEnd MSAnimationEnd oanimationend animationend', function(){
+
+          alert.text("").removeClass("show fadeOut");
+        });
+
+        $this.players[player.id] = new Tank(player);
+        $this.players[player.id].setHealth(0)
+        delete $this.projectiles[projectile.id];
+      },
+      
+      onProjectileExplode(projId){
+
+        delete $this.projectiles[projId];
+      },
+
+      onNoMoveByDead(){
+        let alert = $("div.alert");
+        alert.text(`You are dead, so cannot move. Wait to respawn!`);
+        alert.addClass("show")
+        setTimeout(() => {
+          alert.addClass("animated fadeOut");
+        },2000);
+        alert.one('webkitAnimationEnd mozAnimationEnd MSAnimationEnd oanimationend animationend', function(){
+
+          alert.text("").removeClass("show fadeOut");
+        });
       },
 
       onPlayerDisconnected (playerId) {
@@ -633,7 +765,10 @@ class GameClient {
       playerDisconnected: $this.events.onPlayerDisconnected.bind($this),
       itemSpawned: $this.events.onItemSpawned.bind($this),
       itemCollected: $this.events.onItemCollected.bind($this),
-
+      playerHurt: $this.events.onPlayerHurt.bind($this),
+      playerDead: $this.events.onPlayerDead.bind($this),
+      projectileExplode: $this.events.onProjectileExplode.bind($this),
+      'NoMove:Dead': $this.events.onNoMoveByDead.bind($this),
       'game:pong': function (serverNow) {
         //console.log("GAME_PONG==>",serverNow);
         const now = Date.now()
@@ -652,7 +787,8 @@ class GameClient {
 
     //console.log("UPD_PLAYER=>",player)
     // dead reckoning
-    const { x, y, vx, vy, ax, ay } = player
+    if(player.died) return
+    let { x, y, vx, vy, ax, ay, vxDir, vyDir } = player
 
     //console.log(player);
     //console.log("DEAD_RECO: ",x,y,vx,vy,ax,ay);
@@ -664,6 +800,8 @@ class GameClient {
     player.y = y + (vy * delta) + (ay * delta2 / 2)
     player.vx = vx + (ax * delta)
     player.vy = vy + (ay * delta)
+
+
     player.timestamp = targetTimestamp
     player.move();
 
@@ -677,6 +815,7 @@ class GameClient {
     //console.log("DIR=>>",direction, speed, delta);
     let X = projectile.x + direction.x * speed * delta;
     let Y = projectile.y + direction.y * speed * delta;
+    projectile.distance += direction.x * speed * delta;
     projectile.setPosition(X,Y)
 
     projectile.timestamp = targetTimestamp
@@ -699,6 +838,9 @@ class GameClient {
 
       const projectile = this.projectiles[projId]
       this.updateProjectile(projectile,serverNow)
+      if(projectile.distance > projectile.MAX_DISTANCE){
+        delete this.projectiles[projId];
+      }
     }
 
   }
@@ -911,7 +1053,7 @@ class GameClient {
 
 module.exports = GameClient
 
-},{"./baseProjectile":6,"./gameCamera":9,"./globals":12,"./healthItem":13,"./map":14,"./net":16,"./render":20,"./tank":23,"./utils":24,"@dasilvacontin/keyboard":1,"deep-equal":2}],11:[function(require,module,exports){
+},{"./ammoItem":5,"./baseItem":6,"./baseProjectile":7,"./gameCamera":10,"./globals":13,"./healthItem":14,"./map":15,"./net":17,"./render":21,"./tank":24,"./utils":25,"@dasilvacontin/keyboard":1,"deep-equal":2}],12:[function(require,module,exports){
 const Renderable = require('./renderable')
 
 /**
@@ -1057,7 +1199,7 @@ class GameObject extends Renderable {
 
 module.exports = GameObject
 
-},{"./renderable":21}],12:[function(require,module,exports){
+},{"./renderable":22}],13:[function(require,module,exports){
 let globals = {
 
   vars: {},
@@ -1096,7 +1238,7 @@ let globals = {
 
 module.exports = globals
 
-},{}],13:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 let BaseItem = require('./baseItem')
 let Rectangle = require('./rectangle')
 class HealthItem extends BaseItem
@@ -1105,8 +1247,8 @@ class HealthItem extends BaseItem
 	constructor(o){
 
         super(o);
-        this.setType(this.TYPE.HEALTH);
-        this.effect = this.EFFECT.HEALTH;
+        this.setType(BaseItem.TYPE.HEALTH);
+        this.effect = BaseItem.EFFECT.HEALTH;
 
         this.owner = o.owner || null;
         this.body = new Rectangle(o.x || 0,o.y || 0,this.width,this.height);
@@ -1143,7 +1285,7 @@ class HealthItem extends BaseItem
 }
 
 module.exports = HealthItem
-},{"./baseItem":5,"./rectangle":19}],14:[function(require,module,exports){
+},{"./baseItem":6,"./rectangle":20}],15:[function(require,module,exports){
 const MapChunk = require('./mapChunk')
 /**
  * @class {Map} Map
@@ -1197,7 +1339,7 @@ class Map {
 
 module.exports = Map
 
-},{"./mapChunk":15}],15:[function(require,module,exports){
+},{"./mapChunk":16}],16:[function(require,module,exports){
 let Renderable = require("./renderable");
 let Rectangle = require("./rectangle");
 
@@ -1256,7 +1398,7 @@ class MapChunk extends Renderable {
 
 module.exports = MapChunk
 
-},{"./rectangle":19,"./renderable":21}],16:[function(require,module,exports){
+},{"./rectangle":20,"./renderable":22}],17:[function(require,module,exports){
 // Dead reckoning - Algorithm
 
 // Rocket legue -> Simulation + Redo
@@ -1318,11 +1460,17 @@ class Network {
   }
 
   send (evnt, objectData) {
+
+    let args = Array.from(arguments)
+    args.splice(0,1)
+
+    if(objectData.constructor !== Object ) objectData = args
+
     if(this.isClient){
-      this.socket.emit(evnt, objectData)
+      this.socket.emit.apply(this.socket,[evnt].concat(args))
     }else{
 
-      this.broadcast(evnt,objectData)
+      this.broadcast.apply(this,[evnt].concat(args))
     }
     return this
   }
@@ -1330,7 +1478,12 @@ class Network {
   // Like send but server broadcast to all
   broadcast(evnt,objectData){
 
-    this.io.sockets.emit(evnt,objectData)
+    let args = Array.from(arguments)
+    args.splice(0,1)
+
+    if(objectData.constructor !== Object ) objectData = args
+
+    this.io.sockets.emit.apply(this.io.sockets,[evnt].concat(args))
     return this
   }
 
@@ -1394,7 +1547,7 @@ class Network {
 
 module.exports = Network
 
-},{}],17:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 const GameObject = require('./gameObject')
 
 /**
@@ -1403,17 +1556,19 @@ const GameObject = require('./gameObject')
  */
 class Player extends GameObject {
 
-    constructor(id,x,y,width,height,radius,timestamp){
+    constructor(id,x,y,width,height,radius,timestamp,nickname){
         super(id,x,y,width,height,radius)
         this.inputs = {}
         this.color = ""
         this.timestamp = 0 || timestamp
+        this.nickname = nickname || ""
+        this.bonus = {}
     }
 }
 
 module.exports = Player
 
-},{"./gameObject":11}],18:[function(require,module,exports){
+},{"./gameObject":12}],19:[function(require,module,exports){
 const Renderable = require('./renderable')
 class Point extends Renderable
 {
@@ -1437,7 +1592,7 @@ class Point extends Renderable
 
 module.exports = Point
 
-},{"./renderable":21}],19:[function(require,module,exports){
+},{"./renderable":22}],20:[function(require,module,exports){
 const Point = require('./point')
 const Renderable = require('./renderable')
 class Rectangle extends Renderable {
@@ -1503,7 +1658,7 @@ class Rectangle extends Renderable {
 
 module.exports = Rectangle
 
-},{"./point":18,"./renderable":21}],20:[function(require,module,exports){
+},{"./point":19,"./renderable":22}],21:[function(require,module,exports){
 let globals = require('./globals');
 class Render {
 
@@ -1537,7 +1692,7 @@ if(!globals.getGlobal("SERVER")){
 }else{
   module.exports = null
 }
-},{"./globals":12}],21:[function(require,module,exports){
+},{"./globals":13}],22:[function(require,module,exports){
 const Render = require('./render') // Instance of GFX
 let globals = require('./globals');
 /**
@@ -1568,7 +1723,7 @@ class Renderable {
 module.exports = Renderable
 
 
-},{"./globals":12,"./render":20}],22:[function(require,module,exports){
+},{"./globals":13,"./render":21}],23:[function(require,module,exports){
 /* globals window */
 const globals = require("./globals");
 
@@ -1723,7 +1878,7 @@ class Segment extends Renderable
 
 module.exports = Segment
 
-},{"./globals":12,"./point":18,"./renderable":21,"./vector":25}],23:[function(require,module,exports){
+},{"./globals":13,"./point":19,"./renderable":22,"./vector":26}],24:[function(require,module,exports){
 let globals = require('./globals');
 const utils = require('./utils')
 const Player = require('./player')
@@ -1735,13 +1890,15 @@ const BaseProjectile = require('./baseProjectile')
 class Tank extends Player
 {
   constructor (o) {
-    super(o.id, o.x, o.y, o.width, o.height, o.radius, o.timestamp)
+    super(o.id, o.x, o.y, o.width, o.height, o.radius, o.timestamp,o.nickname)
 
     this.health = o.health ? o.health : 100
     this.maxHealth = o.maxHealth ? o.maxHealth : 100
-    this.died = false
+    this.died = o.died || false
     this.ammo = o.ammo !== undefined ? o.ammo : 10
     this.maxAmmo = o.maxAmmo || 10
+    this.defense = o.defense || 0
+    this.carryFlag = o.carryFlag || false
     this.color = o.color;
 
     this.healthBarOffset = 30
@@ -1772,11 +1929,15 @@ class Tank extends Player
         // Speed y
     this.vy = o.vy ? o.vy : 0
 
+    // Speed vector direction
+    this.vxDir = o.vxDir || 0; // -1 = left; +1 = right
+    this.vyDir = o.vyDir || 0; // -1 = up; +1 = down
+
     // Acceleration
     this.ax = o.ax ? o.ax : 0
     this.ay = o.ay ? o.ay : 0
 
-    this.speed = 20 // Default speed
+    this.maxSpeed = o.maxSpeed || 5 // Default speed
   }
 
   getId () {
@@ -1863,7 +2024,7 @@ class Tank extends Player
       width: this.turret.canon.width,
       height: this.turret.canon.width,
       radius: this.turret.canon.width,
-      damage: 20,
+      damage: 5,
       speed: strenght
 
     })
@@ -1884,19 +2045,32 @@ class Tank extends Player
     this.health = health
     if (this.health > this.maxHealth) this.health = this.maxHealth
     else if (this.health <= 0) {
-      this.died = 0
+      this.died = true
       this.health = 0
     }
 
     var width = this.health * (this.maxHealthBarX - 2) / this.maxHealth
     this.healthBar.vecx = width
+    return this.died;
   }
 
   heal (amountHealth) {
     if (Number.isInteger(parseInt(amountHealth))) {
-      this.setHealth(this.health + amountHealth)
+      if(!this.died)
+        this.setHealth(this.health + amountHealth)
     } else {
       console.error('Tank::heal: Invalid amountHealth')
+    }
+
+    return this
+  };
+
+  chargeAmmo(amountAmmo){
+    if (Number.isInteger(parseInt(amountAmmo))) {
+      this.ammo = this.ammo + amountAmmo;
+      if(this.ammo > this.maxAmmo) this.ammo = this.maxAmmo
+    } else {
+      console.error('Tank::chargeAmmo: Invalid amountAmmo')
     }
 
     return this
@@ -1928,6 +2102,7 @@ class Tank extends Player
     
     //this.gfx.translate(this.turret.base.width,this.turret.base.height)
     this.turret.canon.render(null, this.color)
+    this.gfx.translate(this.turret.base.width,this.turret.base.height)
 
     return this
   };
@@ -1935,6 +2110,18 @@ class Tank extends Player
   drawHealthBar () {
     this.gfx.save()
     let POS_W = (-this.maxHealthBarX+2)/2;
+    /*if(this.carryFlag){
+
+      this.gfx.save()
+      this.gfx.translate(POS_W-20,0);
+      this.gfx.font = "12px FontAwesome";
+      this.gfx.fillStyle = "#FF0000"
+      this.gfx.fillText('\uf024', this.healthBar.x +1,this.healthBar.y);
+      this.gfx.strokeStyle = "#000000"
+      this.gfx.strokeText('\uf024', this.healthBar.x +1,this.healthBar.y );
+      this.gfx.restore();
+
+    }*/
     this.gfx.translate(POS_W,0);
     this.gfx.fillStyle = 'black'
     this.gfx.fillRect(this.healthBar.x - 1, this.healthBar.y - 3, this.maxHealthBarX, this.healthBar.width + 1)
@@ -1948,7 +2135,7 @@ class Tank extends Player
 
 module.exports = Tank
 
-},{"./baseProjectile":6,"./globals":12,"./player":17,"./rectangle":19,"./segment":22,"./utils":24}],24:[function(require,module,exports){
+},{"./baseProjectile":7,"./globals":13,"./player":18,"./rectangle":20,"./segment":23,"./utils":25}],25:[function(require,module,exports){
 let globals = require("./globals")
 let ACCEL = globals.getGlobal("ACCEL");
 if(!ACCEL){
@@ -1967,7 +2154,7 @@ module.exports = {
 
   calculatePlayerAcceleration(player){
 
-    const { inputs } = player
+    let { inputs, vxDir, vyDir } = player
     let ax = 0
     let ay = 0
     console.log("ACCELERATION IS==>",ACCEL);
@@ -1979,11 +2166,14 @@ module.exports = {
 
     player.ax = ax
     player.ay = ay
+
+    player.vxDir = vxDir
+    player.vyDir = vyDir
   }
 
 }
 
-},{"./globals":12}],25:[function(require,module,exports){
+},{"./globals":13}],26:[function(require,module,exports){
 const Renderable = require('./renderable')
 class Vector extends Renderable
 {
@@ -2037,4 +2227,4 @@ class Vector extends Renderable
 
 module.exports = Vector
 
-},{"./renderable":21}]},{},[8]);
+},{"./renderable":22}]},{},[9]);

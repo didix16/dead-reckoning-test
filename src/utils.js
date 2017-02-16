@@ -16,7 +16,7 @@ module.exports = {
 
   calculatePlayerAcceleration(player){
 
-    const { inputs } = player
+    let { inputs, vxDir, vyDir } = player
     let ax = 0
     let ay = 0
     console.log("ACCELERATION IS==>",ACCEL);
@@ -28,6 +28,9 @@ module.exports = {
 
     player.ax = ax
     player.ay = ay
+
+    player.vxDir = vxDir
+    player.vyDir = vyDir
   }
 
 }

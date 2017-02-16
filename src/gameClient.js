@@ -4,9 +4,12 @@ let Tank = require('./tank')
 let Projectile = require('./baseProjectile')
 let GameCamera = require('./gameCamera')
 let Map = require("./map");
-let HealthItem = require("./healthItem")
+let BaseItem = require('./baseItem')
+const HealthItem = require('./healthItem')
+const AmmoItem = require('./ammoItem')
 let globals = require('./globals')
 globals.addGlobal('ACCEL', 1 / 1000);
+const ACCEL = globals.getGlobal("ACCEL");
 
 let utils = require("./utils")
 let Network = require('./net')
@@ -85,11 +88,19 @@ class GameClient {
         $this.players = players
 
         var itemIds = Object.keys(data.serverItems)
-        let items = {}
         itemIds.forEach(function (itemId) {
-          items[itemId] = new HealthItem(data.serverItems[itemId])
-        })
-        $this.items = items;
+          let item = data.serverItems[itemId]
+          switch(item.type){
+
+            case BaseItem.TYPE.HEALTH:
+              $this.items[item.id] = new HealthItem(item);
+              break;
+            case BaseItem.TYPE.AMMO:
+              $this.items[item.id] = new AmmoItem(item);
+              break;
+          }
+
+        });
 
         var pIds = Object.keys(data.serverProjectiles)
         let projectiles = {}
@@ -132,14 +143,78 @@ class GameClient {
           alert.text("").removeClass("show fadeOut");
         });
         
-        $this.items[item.id] = new HealthItem(item);
+        switch(item.type){
+
+          case BaseItem.TYPE.HEALTH:
+            $this.items[item.id] = new HealthItem(item);
+            break;
+          case BaseItem.TYPE.AMMO:
+            $this.items[item.id] = new AmmoItem(item);
+            break;
+        }
+        
       },
 
       onItemCollected (playerId, itemId) {
+
+        let item = $this.items[itemId]
+        let player = $this.players[playerId]
+        switch(item.type){
+
+          case BaseItem.TYPE.HEALTH:
+            player.heal(item.use())
+            break;
+          case BaseItem.TYPE.AMMO:
+            player.chargeAmmo(item.use())
+            break;
+        }
         delete $this.items[itemId]
         // const player = $this.players[playerId]
         // Do the item effect
         // player.score++
+      },
+
+      onPlayerHurt(player, projectile){
+        alert("famae")
+        $this.players[player.id] = new Tank(player);
+        $this.players[player.id].setHealth(player.health)
+        delete $this.projectiles[projectile.id];
+      },
+
+      onPlayerDead(player, projectile){
+
+        let alert = $("div.alert");
+        alert.text(`You has been killed by [ ${$this.players[projectile.owner].nickname} ]!`);
+        alert.addClass("show")
+        setTimeout(() => {
+          alert.addClass("animated fadeOut");
+        },2000);
+        alert.one('webkitAnimationEnd mozAnimationEnd MSAnimationEnd oanimationend animationend', function(){
+
+          alert.text("").removeClass("show fadeOut");
+        });
+
+        $this.players[player.id] = new Tank(player);
+        $this.players[player.id].setHealth(0)
+        delete $this.projectiles[projectile.id];
+      },
+      
+      onProjectileExplode(projId){
+
+        delete $this.projectiles[projId];
+      },
+
+      onNoMoveByDead(){
+        let alert = $("div.alert");
+        alert.text(`You are dead, so cannot move. Wait to respawn!`);
+        alert.addClass("show")
+        setTimeout(() => {
+          alert.addClass("animated fadeOut");
+        },2000);
+        alert.one('webkitAnimationEnd mozAnimationEnd MSAnimationEnd oanimationend animationend', function(){
+
+          alert.text("").removeClass("show fadeOut");
+        });
       },
 
       onPlayerDisconnected (playerId) {
@@ -156,7 +231,10 @@ class GameClient {
       playerDisconnected: $this.events.onPlayerDisconnected.bind($this),
       itemSpawned: $this.events.onItemSpawned.bind($this),
       itemCollected: $this.events.onItemCollected.bind($this),
-
+      playerHurt: $this.events.onPlayerHurt.bind($this),
+      playerDead: $this.events.onPlayerDead.bind($this),
+      projectileExplode: $this.events.onProjectileExplode.bind($this),
+      'NoMove:Dead': $this.events.onNoMoveByDead.bind($this),
       'game:pong': function (serverNow) {
         //console.log("GAME_PONG==>",serverNow);
         const now = Date.now()
@@ -175,7 +253,8 @@ class GameClient {
 
     //console.log("UPD_PLAYER=>",player)
     // dead reckoning
-    const { x, y, vx, vy, ax, ay } = player
+    if(player.died) return
+    let { x, y, vx, vy, ax, ay, vxDir, vyDir } = player
 
     //console.log(player);
     //console.log("DEAD_RECO: ",x,y,vx,vy,ax,ay);
@@ -187,6 +266,8 @@ class GameClient {
     player.y = y + (vy * delta) + (ay * delta2 / 2)
     player.vx = vx + (ax * delta)
     player.vy = vy + (ay * delta)
+
+
     player.timestamp = targetTimestamp
     player.move();
 
@@ -200,6 +281,7 @@ class GameClient {
     //console.log("DIR=>>",direction, speed, delta);
     let X = projectile.x + direction.x * speed * delta;
     let Y = projectile.y + direction.y * speed * delta;
+    projectile.distance += direction.x * speed * delta;
     projectile.setPosition(X,Y)
 
     projectile.timestamp = targetTimestamp
@@ -222,6 +304,9 @@ class GameClient {
 
       const projectile = this.projectiles[projId]
       this.updateProjectile(projectile,serverNow)
+      if(projectile.distance > projectile.MAX_DISTANCE){
+        delete this.projectiles[projId];
+      }
     }
 
   }
