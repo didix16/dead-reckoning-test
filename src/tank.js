@@ -1,8 +1,10 @@
+let globals = require('./globals');
 const utils = require('./utils')
 const Player = require('./player')
 const Segment = require('./segment')
 const Rectangle = require('./rectangle')
 const BaseProjectile = require('./baseProjectile')
+
 
 class Tank extends Player
 {
@@ -12,6 +14,8 @@ class Tank extends Player
     this.health = o.health ? o.health : 100
     this.maxHealth = o.maxHealth ? o.maxHealth : 100
     this.died = false
+    this.ammo = o.ammo !== undefined ? o.ammo : 10
+    this.maxAmmo = o.maxAmmo || 10
     this.color = o.color;
 
     this.healthBarOffset = 30
@@ -119,14 +123,17 @@ class Tank extends Player
     return this
   };
 
+  /**
+   * @pre - Assume this tank has ammo
+   */
   shoot (strenght) {
     strenght = strenght !== undefined ? strenght : 1.0
     var p = new BaseProjectile({
 
-      id: this.id,
-      x: this.turret.canon.x + this.turret.canon.vecx,
-      y: this.turret.canon.y + this.turret.canon.vecy,
-      owner: this.owner,
+      id: -1, // The server will asign a new ID
+      x: this.turret.canon.x,
+      y: this.turret.canon.y,// - this.height/2,
+      owner: this.id,
       width: this.turret.canon.width,
       height: this.turret.canon.width,
       radius: this.turret.canon.width,
@@ -135,13 +142,15 @@ class Tank extends Player
 
     })
 
+    p.translateX = this.width /2;
+    p.translateY = this.height /2;
     p.isExplosive = true
     var s = this.turret.canon.unit()
     p.direction = {
       x: s.vecx,
       y: s.vecy
     }
-    p.render()
+    if(!globals.getGlobal("SERVER")) p.render()
     return p
   }
 

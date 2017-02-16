@@ -1,4 +1,3 @@
-
 let Renderable = require("./renderable");
 let Rectangle = require("./rectangle");
 

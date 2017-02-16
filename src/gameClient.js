@@ -1,8 +1,10 @@
-/* globals requestAnimationFrame, window  */
+/* globals requestAnimationFrame, window, $  */
 let Render = require('./render')
 let Tank = require('./tank')
+let Projectile = require('./baseProjectile')
 let GameCamera = require('./gameCamera')
 let Map = require("./map");
+let HealthItem = require("./healthItem")
 let globals = require('./globals')
 globals.addGlobal('ACCEL', 1 / 1000);
 
@@ -27,6 +29,7 @@ class GameClient {
       RIGHT_ARROW: false,
       UP_ARROW: false,
       DOWN_ARROW: false,
+      SPACE_BAR: false,
       A: false,
       W: false,
       S: false,
@@ -81,8 +84,21 @@ class GameClient {
         })
         $this.players = players
 
-        $this.items = data.serverItems
-        $this.projectiles = data.serverProjectiles
+        var itemIds = Object.keys(data.serverItems)
+        let items = {}
+        itemIds.forEach(function (itemId) {
+          items[itemId] = new HealthItem(data.serverItems[itemId])
+        })
+        $this.items = items;
+
+        var pIds = Object.keys(data.serverProjectiles)
+        let projectiles = {}
+        pIds.forEach(function (projId) {
+          projectiles[projId] = new Projectile(data.serverProjectiles[projId])
+        })
+
+        $this.projectiles = projectiles
+
         $this.myPlayerId = data.myId
       },
 
@@ -98,8 +114,25 @@ class GameClient {
         $this.players[player.id] = new Tank(player);
       },
 
+      onPlayerShoot(player, projectile){
+
+        $this.players[player.id] = new Tank(player);
+        $this.projectiles[projectile.id] = new Projectile(projectile);
+      },
+
       onItemSpawned (item) {
-        $this.items[item.id] = item
+        let alert = $("div.alert");
+        alert.text("A item has spawned!");
+        alert.addClass("show")
+        setTimeout(() => {
+          alert.addClass("animated fadeOut");
+        },2000);
+        alert.one('webkitAnimationEnd mozAnimationEnd MSAnimationEnd oanimationend animationend', function(){
+
+          alert.text("").removeClass("show fadeOut");
+        });
+        
+        $this.items[item.id] = new HealthItem(item);
       },
 
       onItemCollected (playerId, itemId) {
@@ -119,9 +152,10 @@ class GameClient {
       'world:init': $this.events.onWorldInit.bind($this),
       playerMoved: $this.events.onPlayerMoved.bind($this),
       playerRotateTurret: $this.events.onPlayerRotateTurret.bind($this),
+      playerShoot: $this.events.onPlayerShoot.bind($this),
       playerDisconnected: $this.events.onPlayerDisconnected.bind($this),
-      coinSpawned: $this.events.onItemSpawned.bind($this),
-      coinCollected: $this.events.onItemCollected.bind($this),
+      itemSpawned: $this.events.onItemSpawned.bind($this),
+      itemCollected: $this.events.onItemCollected.bind($this),
 
       'game:pong': function (serverNow) {
         //console.log("GAME_PONG==>",serverNow);
@@ -158,6 +192,20 @@ class GameClient {
 
   }
 
+  updateProjectile(projectile, targetTimestamp){
+
+    const {direction, speed} = projectile
+    const delta = targetTimestamp - projectile.timestamp
+
+    //console.log("DIR=>>",direction, speed, delta);
+    let X = projectile.x + direction.x * speed * delta;
+    let Y = projectile.y + direction.y * speed * delta;
+    projectile.setPosition(X,Y)
+
+    projectile.timestamp = targetTimestamp
+
+  }
+
 
   logic () {
 
@@ -168,6 +216,12 @@ class GameClient {
     for (let playerId in this.players) {
       const player = this.players[playerId]
       this.updatePlayer(player, serverNow)
+    }
+
+    for(let projId in this.projectiles) {
+
+      const projectile = this.projectiles[projId]
+      this.updateProjectile(projectile,serverNow)
     }
 
   }
@@ -231,7 +285,7 @@ class GameClient {
 
     // Iterate over items
     for (let itemId in this.items) {
-      let item = this.projectiles[itemId]
+      let item = this.items[itemId]
       item.render()
     }
 
@@ -265,18 +319,70 @@ class GameClient {
     // 5. Restore the Camera (so return to origin canvas)
     this.camera.restoreFocus();
 
-    // Render my pos
-    
+    // Render my info
     if(myPlayer){
       Render.save();
-      Render.font = '12px arial';
+      
+      Render.font = "12px FontAwesome";
+      Render.fillText('\uf041', 15,20);
       Render.strokeStyle = "black";
+      Render.font = '12px arial';
       Render.strokeText("Pos: ("+parseInt(myPlayer.x)+","+parseInt(myPlayer.y)+")",30,20);
       Render.fillStyle = "white";
       Render.fillText("Pos: ("+parseInt(myPlayer.x)+","+parseInt(myPlayer.y)+")",30,20);
+
+      Render.font = "12px FontAwesome";
+      Render.fillText('\uf135', 130,20);
+      Render.font = '12px arial';
+      
+      Render.strokeText(`Ammo: ${myPlayer.ammo}`, 150, 20)
+      Render.fillText(`Ammo: ${myPlayer.ammo}`, 150, 20)
+
+      if(myPlayer.ammo === 0){
+        Render.strokeText(`[ No ammo ]`, 220, 20)
+        Render.fillStyle = "red";
+        Render.fillText(`[ No ammo ]`, 220, 20)
+        Render.fillStyle = "white";
+      }
+
+      let perc = myPlayer.health / myPlayer.maxHealth;
+      if(perc >= 0.8)
+        Render.fillStyle = "#00ff00"
+      else if(perc >= 0.3)
+        Render.fillStyle = "#FFA500"
+      else{
+        Render.fillStyle = "#CC0000"
+      }
+        
+      
+      Render.font = "12px FontAwesome";
+      Render.fillText('\uf004', 300,20);
+      Render.font = '12px arial';
+      Render.strokeText(`Health: ${myPlayer.health} / ${myPlayer.maxHealth}`, 320, 20)
+      
+
+      Render.fillText(`Health: ${myPlayer.health} / ${myPlayer.maxHealth}`, 320, 20)
+
+      if(perc < 0.3) {
+        var t = Date.now()/1000*Math.PI/2;
+			  let alpha = 0.25 * Math.cos(t*1.5) + 0.5;
+
+        Render.globalAlpha = alpha
+
+        Render.font = "12px FontAwesome";
+        Render.fillText('\uf071', 430,20);
+        Render.font = '12px arial';
+        
+        Render.strokeText(`[ WARNING ]`, 450, 20)
+        Render.fillStyle = 'yellow';
+       
+        Render.fillText(`[ WARNING ]`, 450, 20)
+        Render.fillStyle = 'white';
+      }
       
       Render.restore();
     }
+    
   }
 
   updateInputs () { 
@@ -291,8 +397,13 @@ class GameClient {
     if (!deepEqual(this.myInputs, oldInputs)) {
       this.net.send('move', this.myInputs)
 
-      if(this.myInputs.A){
+      if( this.myInputs.A || this.myInputs.D ){
         this.net.send('rotateTurret',this.myInputs);
+      }
+
+      if( this.myInputs.SPACE_BAR ){
+
+        this.net.send('shoot', this.myInputs);
       }
       // update our local player' inputs aproximately when the server
       // takes them into account

@@ -177,6 +177,108 @@ function shim (obj) {
 }
 
 },{}],5:[function(require,module,exports){
+let GameObject = require('./gameObject')
+class BaseItem extends GameObject
+{   
+    constructor(o){
+        super(o.id,o.x,o.y,o.width,o.height,o.radius)
+        this.owner = null;
+
+        // The body that represents the item on the ground
+        this.body = null;
+
+        // Constants that represent what kind of item is
+        this.TYPE = {
+
+            JOKE: -1, // Means on pickup can explode and substract health
+            HEALTH: 0,
+            AMMO: 1, // Example: Missiles
+            TRAP: 2, // Example, can be a IA Turret, Mine, etc..
+            WEAPON: 3 // Not implemented yet
+        };
+
+        this.type = -1; // By default JOKE
+
+        // Constants that represent what kind of effect makes the item
+        this.EFFECT = {
+            NONE: -1,
+            HEALTH: 0,
+            CHARGE_AMMO: 1,
+            DAMAGE: 2
+
+        };
+
+        this.effect = -1; // By default nothing
+
+        this.usable = false; // Tells if the item is usable or not
+        this.used = false; // Only meaning if the item is usable
+        this.timestamp = 0;
+    }
+
+	getType(){
+
+		return this.type;
+	}
+
+
+	setType(t){
+
+		this.type = t;
+
+		// Makes the item usable if the type of item is a trap
+		if(this.type == this.TYPE.TRAP) this.usable = true;
+		return this;
+	};
+
+	getEffect(){
+
+		return this.effect;
+	}
+
+	// Interface method
+	effectHandler(params){ return this};
+
+	playerInArea(player){
+
+	};
+
+	pickUp(player){
+
+        return this;
+	};
+
+	// Triggers only the onUsed event if the item is usable
+	use(player){
+
+		return this;
+	};
+
+	// Spawn the item at pos(x,y). If x or y don't belongs to wolrd coordinates, return false, else trigger spawnItem event
+	spawnAt(x,y){
+
+		this.x = x;
+		this.y = y;
+
+		if(this.body && this.body.x !== undefined && this.body.y !== undefined){
+			this.body.x = x;
+			this.body.y = y;
+		}else{
+			console.error("BaseItem::spawnAt: the item has not a body to be drawed");
+			return false;
+		}
+
+		return this;
+	};
+
+	render(){
+
+		return this;
+	};
+
+}
+
+module.exports = BaseItem
+},{"./gameObject":11}],6:[function(require,module,exports){
 const GameObject = require('./gameObject')
 const Circle = require('./circle')
 class BaseProjectile extends GameObject
@@ -192,7 +294,11 @@ class BaseProjectile extends GameObject
 
     this.isExplosive = false
 
-    this.direction = {
+    this.timestamp = o.timestamp || 0
+    this.translateX = o.translateX || this.translateX
+    this.translateY = o.translateY || this.translateY
+
+    this.direction = o.direction || {
       x: 0,
       y: 0
     }
@@ -202,7 +308,7 @@ class BaseProjectile extends GameObject
             y: 0
         }; */
 
-    this.speed = 0.0
+    this.speed = o.speed || 0.0
   }
 
   getId () {
@@ -228,7 +334,10 @@ class BaseProjectile extends GameObject
   };
 
   render () {
+
+    this.gfx.translate(-this.translateX,-this.translateY)
     this.body.render('#fff', true)
+    this.gfx.translate(this.translateX,this.translateY)
     return this
   }
 
@@ -236,7 +345,7 @@ class BaseProjectile extends GameObject
 
 module.exports = BaseProjectile
 
-},{"./circle":6,"./gameObject":10}],6:[function(require,module,exports){
+},{"./circle":7,"./gameObject":11}],7:[function(require,module,exports){
 const Renderable = require('./renderable')
 class Circle extends Renderable
 {
@@ -269,7 +378,7 @@ class Circle extends Renderable
 
 module.exports = Circle
 
-},{"./renderable":19}],7:[function(require,module,exports){
+},{"./renderable":21}],8:[function(require,module,exports){
 /* globals io */
 
 // tool de test_ coverage && coverall
@@ -286,7 +395,9 @@ document.addEventListener('keyup', function (e) {
 })
 
 var globals = require('./globals')
+
 const canvas = document.createElement('canvas')
+canvas.setAttribute('style', 'font-family:fontawesome;position:absolute')
 canvas.width = window.innerWidth
 canvas.height = window.innerHeight
 document.body.appendChild(canvas)
@@ -311,7 +422,7 @@ window.game = game
 
 game.run()
 
-},{"./gameClient":9,"./globals":11}],8:[function(require,module,exports){
+},{"./gameClient":10,"./globals":12}],9:[function(require,module,exports){
 const GameObject = require('./gameObject')
 /**
  * A camera that foucus the scene in some part of the game world
@@ -363,12 +474,14 @@ class GameCamera extends GameObject {
 
 module.exports = GameCamera
 
-},{"./gameObject":10}],9:[function(require,module,exports){
-/* globals requestAnimationFrame, window  */
+},{"./gameObject":11}],10:[function(require,module,exports){
+/* globals requestAnimationFrame, window, $  */
 let Render = require('./render')
 let Tank = require('./tank')
+let Projectile = require('./baseProjectile')
 let GameCamera = require('./gameCamera')
 let Map = require("./map");
+let HealthItem = require("./healthItem")
 let globals = require('./globals')
 globals.addGlobal('ACCEL', 1 / 1000);
 
@@ -393,6 +506,7 @@ class GameClient {
       RIGHT_ARROW: false,
       UP_ARROW: false,
       DOWN_ARROW: false,
+      SPACE_BAR: false,
       A: false,
       W: false,
       S: false,
@@ -447,8 +561,21 @@ class GameClient {
         })
         $this.players = players
 
-        $this.items = data.serverItems
-        $this.projectiles = data.serverProjectiles
+        var itemIds = Object.keys(data.serverItems)
+        let items = {}
+        itemIds.forEach(function (itemId) {
+          items[itemId] = new HealthItem(data.serverItems[itemId])
+        })
+        $this.items = items;
+
+        var pIds = Object.keys(data.serverProjectiles)
+        let projectiles = {}
+        pIds.forEach(function (projId) {
+          projectiles[projId] = new Projectile(data.serverProjectiles[projId])
+        })
+
+        $this.projectiles = projectiles
+
         $this.myPlayerId = data.myId
       },
 
@@ -464,8 +591,25 @@ class GameClient {
         $this.players[player.id] = new Tank(player);
       },
 
+      onPlayerShoot(player, projectile){
+
+        $this.players[player.id] = new Tank(player);
+        $this.projectiles[projectile.id] = new Projectile(projectile);
+      },
+
       onItemSpawned (item) {
-        $this.items[item.id] = item
+        let alert = $("div.alert");
+        alert.text("A item has spawned!");
+        alert.addClass("show")
+        setTimeout(() => {
+          alert.addClass("animated fadeOut");
+        },2000);
+        alert.one('webkitAnimationEnd mozAnimationEnd MSAnimationEnd oanimationend animationend', function(){
+
+          alert.text("").removeClass("show fadeOut");
+        });
+        
+        $this.items[item.id] = new HealthItem(item);
       },
 
       onItemCollected (playerId, itemId) {
@@ -485,9 +629,10 @@ class GameClient {
       'world:init': $this.events.onWorldInit.bind($this),
       playerMoved: $this.events.onPlayerMoved.bind($this),
       playerRotateTurret: $this.events.onPlayerRotateTurret.bind($this),
+      playerShoot: $this.events.onPlayerShoot.bind($this),
       playerDisconnected: $this.events.onPlayerDisconnected.bind($this),
-      coinSpawned: $this.events.onItemSpawned.bind($this),
-      coinCollected: $this.events.onItemCollected.bind($this),
+      itemSpawned: $this.events.onItemSpawned.bind($this),
+      itemCollected: $this.events.onItemCollected.bind($this),
 
       'game:pong': function (serverNow) {
         //console.log("GAME_PONG==>",serverNow);
@@ -524,6 +669,20 @@ class GameClient {
 
   }
 
+  updateProjectile(projectile, targetTimestamp){
+
+    const {direction, speed} = projectile
+    const delta = targetTimestamp - projectile.timestamp
+
+    //console.log("DIR=>>",direction, speed, delta);
+    let X = projectile.x + direction.x * speed * delta;
+    let Y = projectile.y + direction.y * speed * delta;
+    projectile.setPosition(X,Y)
+
+    projectile.timestamp = targetTimestamp
+
+  }
+
 
   logic () {
 
@@ -534,6 +693,12 @@ class GameClient {
     for (let playerId in this.players) {
       const player = this.players[playerId]
       this.updatePlayer(player, serverNow)
+    }
+
+    for(let projId in this.projectiles) {
+
+      const projectile = this.projectiles[projId]
+      this.updateProjectile(projectile,serverNow)
     }
 
   }
@@ -597,7 +762,7 @@ class GameClient {
 
     // Iterate over items
     for (let itemId in this.items) {
-      let item = this.projectiles[itemId]
+      let item = this.items[itemId]
       item.render()
     }
 
@@ -631,18 +796,70 @@ class GameClient {
     // 5. Restore the Camera (so return to origin canvas)
     this.camera.restoreFocus();
 
-    // Render my pos
-    
+    // Render my info
     if(myPlayer){
       Render.save();
-      Render.font = '12px arial';
+      
+      Render.font = "12px FontAwesome";
+      Render.fillText('\uf041', 15,20);
       Render.strokeStyle = "black";
+      Render.font = '12px arial';
       Render.strokeText("Pos: ("+parseInt(myPlayer.x)+","+parseInt(myPlayer.y)+")",30,20);
       Render.fillStyle = "white";
       Render.fillText("Pos: ("+parseInt(myPlayer.x)+","+parseInt(myPlayer.y)+")",30,20);
+
+      Render.font = "12px FontAwesome";
+      Render.fillText('\uf135', 130,20);
+      Render.font = '12px arial';
+      
+      Render.strokeText(`Ammo: ${myPlayer.ammo}`, 150, 20)
+      Render.fillText(`Ammo: ${myPlayer.ammo}`, 150, 20)
+
+      if(myPlayer.ammo === 0){
+        Render.strokeText(`[ No ammo ]`, 220, 20)
+        Render.fillStyle = "red";
+        Render.fillText(`[ No ammo ]`, 220, 20)
+        Render.fillStyle = "white";
+      }
+
+      let perc = myPlayer.health / myPlayer.maxHealth;
+      if(perc >= 0.8)
+        Render.fillStyle = "#00ff00"
+      else if(perc >= 0.3)
+        Render.fillStyle = "#FFA500"
+      else{
+        Render.fillStyle = "#CC0000"
+      }
+        
+      
+      Render.font = "12px FontAwesome";
+      Render.fillText('\uf004', 300,20);
+      Render.font = '12px arial';
+      Render.strokeText(`Health: ${myPlayer.health} / ${myPlayer.maxHealth}`, 320, 20)
+      
+
+      Render.fillText(`Health: ${myPlayer.health} / ${myPlayer.maxHealth}`, 320, 20)
+
+      if(perc < 0.3) {
+        var t = Date.now()/1000*Math.PI/2;
+			  let alpha = 0.25 * Math.cos(t*1.5) + 0.5;
+
+        Render.globalAlpha = alpha
+
+        Render.font = "12px FontAwesome";
+        Render.fillText('\uf071', 430,20);
+        Render.font = '12px arial';
+        
+        Render.strokeText(`[ WARNING ]`, 450, 20)
+        Render.fillStyle = 'yellow';
+       
+        Render.fillText(`[ WARNING ]`, 450, 20)
+        Render.fillStyle = 'white';
+      }
       
       Render.restore();
     }
+    
   }
 
   updateInputs () { 
@@ -657,8 +874,13 @@ class GameClient {
     if (!deepEqual(this.myInputs, oldInputs)) {
       this.net.send('move', this.myInputs)
 
-      if(this.myInputs.A){
+      if( this.myInputs.A || this.myInputs.D ){
         this.net.send('rotateTurret',this.myInputs);
+      }
+
+      if( this.myInputs.SPACE_BAR ){
+
+        this.net.send('shoot', this.myInputs);
       }
       // update our local player' inputs aproximately when the server
       // takes them into account
@@ -689,8 +911,9 @@ class GameClient {
 
 module.exports = GameClient
 
-},{"./gameCamera":8,"./globals":11,"./map":12,"./net":14,"./render":18,"./tank":21,"./utils":22,"@dasilvacontin/keyboard":1,"deep-equal":2}],10:[function(require,module,exports){
+},{"./baseProjectile":6,"./gameCamera":9,"./globals":12,"./healthItem":13,"./map":14,"./net":16,"./render":20,"./tank":23,"./utils":24,"@dasilvacontin/keyboard":1,"deep-equal":2}],11:[function(require,module,exports){
 const Renderable = require('./renderable')
+
 /**
  * Represents a in-game object in 2D. Has a x,y width and height
  * @public
@@ -822,18 +1045,19 @@ class GameObject extends Renderable {
   }
 
     /**
-     * A method that each GameObject must be implemented for self rendering in the GameWorld
+     * A method that each GameObject must be implemented for self rendering in the GameWorld.
      * @public
      * @return {GameObject} - Return self instance for chaining
      */
   render () {
+
     return this
   }
 }
 
 module.exports = GameObject
 
-},{"./renderable":19}],11:[function(require,module,exports){
+},{"./renderable":21}],12:[function(require,module,exports){
 let globals = {
 
   vars: {},
@@ -872,7 +1096,54 @@ let globals = {
 
 module.exports = globals
 
-},{}],12:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
+let BaseItem = require('./baseItem')
+let Rectangle = require('./rectangle')
+class HealthItem extends BaseItem
+{
+
+	constructor(o){
+
+        super(o);
+        this.setType(this.TYPE.HEALTH);
+        this.effect = this.EFFECT.HEALTH;
+
+        this.owner = o.owner || null;
+        this.body = new Rectangle(o.x || 0,o.y || 0,this.width,this.height);
+        this.usable = true;
+        this.used = o.used || false
+        this.timestamp = o.timestamp || this.timestamp
+
+    }
+
+    // At the moment allways return 25, means the health to be restored
+    use(){
+
+        this.used = true;
+        return 25;
+    }
+
+	render(){
+		
+        
+		this.gfx.save();
+        
+        let POS_W = - this.width/2
+        let POS_H = - this.height/2
+        this.gfx.translate(POS_W,POS_H);
+        this.body.render("#fff",true);
+		this.gfx.font = "12px FontAwesome";
+		this.gfx.fillStyle = "#FF0000";
+		this.gfx.fillText('\uf067',this.x-1+this.width/4 , this.y + this.height-12+this.height/2);
+		this.gfx.restore();
+
+		return this;
+	};
+
+}
+
+module.exports = HealthItem
+},{"./baseItem":5,"./rectangle":19}],14:[function(require,module,exports){
 const MapChunk = require('./mapChunk')
 /**
  * @class {Map} Map
@@ -926,8 +1197,7 @@ class Map {
 
 module.exports = Map
 
-},{"./mapChunk":13}],13:[function(require,module,exports){
-
+},{"./mapChunk":15}],15:[function(require,module,exports){
 let Renderable = require("./renderable");
 let Rectangle = require("./rectangle");
 
@@ -986,7 +1256,7 @@ class MapChunk extends Renderable {
 
 module.exports = MapChunk
 
-},{"./rectangle":17,"./renderable":19}],14:[function(require,module,exports){
+},{"./rectangle":19,"./renderable":21}],16:[function(require,module,exports){
 // Dead reckoning - Algorithm
 
 // Rocket legue -> Simulation + Redo
@@ -1124,7 +1394,7 @@ class Network {
 
 module.exports = Network
 
-},{}],15:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 const GameObject = require('./gameObject')
 
 /**
@@ -1143,7 +1413,7 @@ class Player extends GameObject {
 
 module.exports = Player
 
-},{"./gameObject":10}],16:[function(require,module,exports){
+},{"./gameObject":11}],18:[function(require,module,exports){
 const Renderable = require('./renderable')
 class Point extends Renderable
 {
@@ -1167,7 +1437,7 @@ class Point extends Renderable
 
 module.exports = Point
 
-},{"./renderable":19}],17:[function(require,module,exports){
+},{"./renderable":21}],19:[function(require,module,exports){
 const Point = require('./point')
 const Renderable = require('./renderable')
 class Rectangle extends Renderable {
@@ -1233,7 +1503,7 @@ class Rectangle extends Renderable {
 
 module.exports = Rectangle
 
-},{"./point":16,"./renderable":19}],18:[function(require,module,exports){
+},{"./point":18,"./renderable":21}],20:[function(require,module,exports){
 let globals = require('./globals');
 class Render {
 
@@ -1267,7 +1537,7 @@ if(!globals.getGlobal("SERVER")){
 }else{
   module.exports = null
 }
-},{"./globals":11}],19:[function(require,module,exports){
+},{"./globals":12}],21:[function(require,module,exports){
 const Render = require('./render') // Instance of GFX
 let globals = require('./globals');
 /**
@@ -1289,6 +1559,8 @@ class Renderable {
     }
 
     this.gfx = Render
+    this.translateX = 0
+    this.translateY = 0
   }
 
 }
@@ -1296,7 +1568,7 @@ class Renderable {
 module.exports = Renderable
 
 
-},{"./globals":11,"./render":18}],20:[function(require,module,exports){
+},{"./globals":12,"./render":20}],22:[function(require,module,exports){
 /* globals window */
 const globals = require("./globals");
 
@@ -1451,12 +1723,14 @@ class Segment extends Renderable
 
 module.exports = Segment
 
-},{"./globals":11,"./point":16,"./renderable":19,"./vector":23}],21:[function(require,module,exports){
+},{"./globals":12,"./point":18,"./renderable":21,"./vector":25}],23:[function(require,module,exports){
+let globals = require('./globals');
 const utils = require('./utils')
 const Player = require('./player')
 const Segment = require('./segment')
 const Rectangle = require('./rectangle')
 const BaseProjectile = require('./baseProjectile')
+
 
 class Tank extends Player
 {
@@ -1466,6 +1740,8 @@ class Tank extends Player
     this.health = o.health ? o.health : 100
     this.maxHealth = o.maxHealth ? o.maxHealth : 100
     this.died = false
+    this.ammo = o.ammo !== undefined ? o.ammo : 10
+    this.maxAmmo = o.maxAmmo || 10
     this.color = o.color;
 
     this.healthBarOffset = 30
@@ -1573,14 +1849,17 @@ class Tank extends Player
     return this
   };
 
+  /**
+   * @pre - Assume this tank has ammo
+   */
   shoot (strenght) {
     strenght = strenght !== undefined ? strenght : 1.0
     var p = new BaseProjectile({
 
-      id: this.id,
-      x: this.turret.canon.x + this.turret.canon.vecx,
-      y: this.turret.canon.y + this.turret.canon.vecy,
-      owner: this.owner,
+      id: -1, // The server will asign a new ID
+      x: this.turret.canon.x,
+      y: this.turret.canon.y,// - this.height/2,
+      owner: this.id,
       width: this.turret.canon.width,
       height: this.turret.canon.width,
       radius: this.turret.canon.width,
@@ -1589,13 +1868,15 @@ class Tank extends Player
 
     })
 
+    p.translateX = this.width /2;
+    p.translateY = this.height /2;
     p.isExplosive = true
     var s = this.turret.canon.unit()
     p.direction = {
       x: s.vecx,
       y: s.vecy
     }
-    p.render()
+    if(!globals.getGlobal("SERVER")) p.render()
     return p
   }
 
@@ -1667,7 +1948,7 @@ class Tank extends Player
 
 module.exports = Tank
 
-},{"./baseProjectile":5,"./player":15,"./rectangle":17,"./segment":20,"./utils":22}],22:[function(require,module,exports){
+},{"./baseProjectile":6,"./globals":12,"./player":17,"./rectangle":19,"./segment":22,"./utils":24}],24:[function(require,module,exports){
 let globals = require("./globals")
 let ACCEL = globals.getGlobal("ACCEL");
 if(!ACCEL){
@@ -1702,7 +1983,7 @@ module.exports = {
 
 }
 
-},{"./globals":11}],23:[function(require,module,exports){
+},{"./globals":12}],25:[function(require,module,exports){
 const Renderable = require('./renderable')
 class Vector extends Renderable
 {
@@ -1756,4 +2037,4 @@ class Vector extends Renderable
 
 module.exports = Vector
 
-},{"./renderable":19}]},{},[7]);
+},{"./renderable":21}]},{},[8]);

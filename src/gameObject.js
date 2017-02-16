@@ -1,4 +1,5 @@
 const Renderable = require('./renderable')
+
 /**
  * Represents a in-game object in 2D. Has a x,y width and height
  * @public
@@ -130,11 +131,12 @@ class GameObject extends Renderable {
   }
 
     /**
-     * A method that each GameObject must be implemented for self rendering in the GameWorld
+     * A method that each GameObject must be implemented for self rendering in the GameWorld.
      * @public
      * @return {GameObject} - Return self instance for chaining
      */
   render () {
+
     return this
   }
 }

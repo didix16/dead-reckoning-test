@@ -14,7 +14,9 @@ document.addEventListener('keyup', function (e) {
 })
 
 var globals = require('./globals')
+
 const canvas = document.createElement('canvas')
+canvas.setAttribute('style', 'font-family:fontawesome;position:absolute')
 canvas.width = window.innerWidth
 canvas.height = window.innerHeight
 document.body.appendChild(canvas)

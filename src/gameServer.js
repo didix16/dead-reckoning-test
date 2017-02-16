@@ -7,6 +7,7 @@ const utils = require("./utils")
 const randomColor = require('randomcolor')
 const Network = require('./net')
 const Tank = require("./tank");
+const HealthItem = require('./healthItem')
 
 
 
@@ -17,6 +18,7 @@ class GameServer {
     this.items = {}
     this.projectiles = {}
     this.nextItemId = 0
+    this.nextProjectileId = 0
     this.net = new Network(socketIO)
     this.lastItemSpawn = Date.now()
     let $this = this // self reference
@@ -51,6 +53,12 @@ class GameServer {
         $this.events.onPlayerRotateTurret(this, inputs)
       },
 
+      shoot: function(inputs){
+
+        console.log("Player shoot");
+        $this.events.onPlayerShoot(this, inputs);
+      },
+
       disconnect: function () {
         $this.events.onPlayerDisconnected(this)
       }
@@ -66,6 +74,7 @@ class GameServer {
           RIGHT_ARROW: false,
           UP_ARROW: false,
           DOWN_ARROW: false,
+          SPACE_BAR: false,
           A: false,
           W: false,
           S: false,
@@ -124,7 +133,7 @@ class GameServer {
 
       onPlayerRotateTurret(socket, inputs) {
 
-        console.log(`${new Date()}: ${socket.id} moved`)
+        console.log(`${new Date()}: ${socket.id} rotated the turret`)
 
         const player = $this.players[socket.id]
         const now = Date.now()
@@ -132,13 +141,39 @@ class GameServer {
 
         player.inputs = inputs
         if(player.inputs.A)
-          player.turret.orientation += 4;
+          player.rotateTurret(4);
         else if(player.inputs.D)
-          player.turret.orientation -= 4;
+          player.rotateTurret(-4);
 
         //console.log("PLAYER_NEW_ACC", player);
         socket.emit('playerRotateTurret', player);
         socket.broadcast.emit('playerRotateTurret', player);
+      },
+
+      onPlayerShoot(socket, inputs){
+
+        const player = $this.players[socket.id]
+        const now = Date.now()
+        $this.updatePlayer(player, now)
+
+        player.inputs = inputs
+
+        if(player.ammo > 0 && player.inputs.SPACE_BAR){
+
+          let projectile = player.shoot();
+          projectile.timestamp = now;
+          player.ammo--;
+          projectile.id = $this.nextProjectileId;
+          $this.projectiles[projectile.id] = projectile;
+
+          $this.updateProjectile(projectile,now)
+
+          ++$this.nextProjectileId;
+
+          socket.emit('playerShoot', player,projectile);
+          socket.broadcast.emit('playerShoot', player,projectile);
+
+        }
       },
 
       onPlayerDisconnected (socket) {
@@ -154,6 +189,7 @@ class GameServer {
 
   updatePlayer(player, targetTimestamp){
 
+    if(!player) return // Avoid null player (In some cases here arrives a null :S)
     const { x, y, vx, vy, ax, ay } = player
 
     //console.log('UPDT_PLAYER==>', x,y,vx,vy,ax,ay);
@@ -167,8 +203,23 @@ class GameServer {
     player.vx = vx + (ax * delta)
     player.vy = vy + (ay * delta)
     player.timestamp = targetTimestamp
+    player.move();
 
     return this
+  }
+
+  updateProjectile(projectile, targetTimestamp){
+
+    const {direction, speed} = projectile
+    const delta = targetTimestamp - projectile.timestamp
+
+    projectile.x += direction.x * speed * delta;
+    projectile.y += direction.y * speed * delta;
+
+    //console.log("UP_PROJECT==>",direction,speed,delta, projectile.x);
+
+    projectile.timestamp = targetTimestamp
+    
   }
 
   logic () {
@@ -193,21 +244,38 @@ class GameServer {
       }*/
     }
 
-    //this.itemSpawner()
+    for( let projId in this.projectiles) {
+
+      const projectile = this.projectiles[projId]
+
+      this.updateProjectile(projectile,now)
+    }
+
+    this.itemSpawner()
 
   }
 
   itemSpawner () {
     // Item spawner
-    if (Date.now() - this.lastItemSpawn > 1000) {
-      const item = {
-        id: this.nextItemId++,
-        x: Math.random() * 500,
-        y: Math.random() * 500
-      }
+    let now = Date.now();
+    if ( now - this.lastItemSpawn > 5000) {
+      
+      const item = new HealthItem({
+        id: this.nextItemId,
+        x: 0 ,
+        y: 0,
+        width: 16,
+        height: 16,
+        radius: 16,
+        timestamp: now
+
+      });
+
+      item.spawnAt(Math.floor(Math.random() * 2000) - 1000,Math.floor(Math.random() * 2000) - 1000);
 
       this.items[item.id] = item
-      this.lastItemSpawn = Date.now()
+      ++this.nextItemId;
+      this.lastItemSpawn = now
       this.net.broadcast('itemSpawned', item)
     }
   }

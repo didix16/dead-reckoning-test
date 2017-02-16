@@ -6,11 +6,35 @@
                 margin: 0;
                 padding: 0
             }
+
+            div.alert {
+                font-family: "Arial";
+                background-color: darkblue;
+                padding: 10px;
+                color: white;
+                display: none;
+                position: absolute;
+                font-size: 24px;
+                top: 40%;
+                left: 50%;
+                -webkit-transform: translate(-50%, -60%);
+                transform: translate(-50%, -60%);
+
+            }
+
+            div.alert.show {
+                display: inline-block !important;
+            }
         </style>
+        
+        <link rel="stylesheet" href="./css/animate.css" type="text/css">
+        <link href="./css/font-awesome.min.css" rel="stylesheet" type="text/css" >
     </head>
     <body>
         <script src="/socket.io/socket.io.js"></script>
         <script src="./js/bundle.js"></script>
+        <script src="./js/jquery-1.11.0.min.js"></script>
         
+        <div class="alert"></div>
     </body>
 </html>

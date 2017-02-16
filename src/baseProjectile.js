@@ -13,7 +13,11 @@ class BaseProjectile extends GameObject
 
     this.isExplosive = false
 
-    this.direction = {
+    this.timestamp = o.timestamp || 0
+    this.translateX = o.translateX || this.translateX
+    this.translateY = o.translateY || this.translateY
+
+    this.direction = o.direction || {
       x: 0,
       y: 0
     }
@@ -23,7 +27,7 @@ class BaseProjectile extends GameObject
             y: 0
         }; */
 
-    this.speed = 0.0
+    this.speed = o.speed || 0.0
   }
 
   getId () {
@@ -49,7 +53,10 @@ class BaseProjectile extends GameObject
   };
 
   render () {
+
+    this.gfx.translate(-this.translateX,-this.translateY)
     this.body.render('#fff', true)
+    this.gfx.translate(this.translateX,this.translateY)
     return this
   }
 

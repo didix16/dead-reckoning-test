@@ -19,6 +19,8 @@ class Renderable {
     }
 
     this.gfx = Render
+    this.translateX = 0
+    this.translateY = 0
   }
 
 }
