@@ -411,11 +411,11 @@ class FlagItem extends BaseItem
                 maxHealth: 500,
                 maxAmmo: 25,
                 defense: 2
-            },
+            }/*,
             timmer : setInterval(()=>{
 
                 player.score++;
-            },500)
+            },500)*/
         }
 
         for(let prop in player.bonus.increase){
