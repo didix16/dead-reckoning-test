@@ -605,6 +605,7 @@ class GameClient {
     this.net = new Network(o.io,true)
     this.players = {}
     this.ranking = []
+    this.mountains = {}
     this.items = {}
     this.projectiles = {}
     this.lastLogic = 0
@@ -664,6 +665,7 @@ class GameClient {
 
       onWorldInit (data) {
         console.log('INCOMING_DATA',data)
+        this.mountains = data.serverMountains
         $this.addEventHistory(`Welcome [${$this.myNickname}] to Tank.io. <br>You have to kill everyone, special who carry's <br>the flag!`)
         var playerIds = Object.keys(data.serverPlayers)
         let players = {}
@@ -942,7 +944,7 @@ class GameClient {
 
       let p = this.ranking[i];
       let idx = parseInt(i)+1;
-      this.leaderBoard.innerHTML += `${idx}. ${p.nickname} - ${p.score}`
+      this.leaderBoard.innerHTML += `${idx}. ${p.nickname} - ${p.score}<br>`
     }
 
     return this;
@@ -1032,6 +1034,16 @@ class GameClient {
       let mapChunk = mapChunks[chId];
       mapChunk.render();
     }
+
+    Render.save();
+    Render.fillStyle = "#8B4513";
+    for(let mId in this.mountains){
+
+      let m = this.mountains[mId];
+      
+      Render.fillRect(m.x,m.y,m.width,m.height)
+    }
+    Render.restore()
 
     // Draw World graphic
     this.gfx.beginPath();

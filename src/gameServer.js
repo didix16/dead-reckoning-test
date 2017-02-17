@@ -22,6 +22,9 @@ class GameServer {
     this.items = {}
     this.world = new GameWorld(4000,4000)
     this.projectiles = {}
+    this.mountains = {
+
+    };
     this.nextItemId = 0
     this.nextProjectileId = 0
     this.net = new Network(socketIO)
@@ -54,6 +57,16 @@ class GameServer {
       }
       this.items[item.id] = item
     }*/
+
+    for(let i = 0; i< 30;i++){
+
+      this.mountains[i] = {
+        width: Math.random() * 500,
+        height: Math.random() * 500,
+        x: Math.floor(Math.random() * this.world.map.width/2) - this.world.map.width/4,
+        y: Math.floor(Math.random() * this.world.map.width/2) - this.world.map.width/4
+      }
+    }
 
     this.netEvents = {
       'game:ping': function () {
@@ -131,6 +144,7 @@ class GameServer {
           serverPlayers: $this.players,
           serverItems: $this.items,
           serverProjectiles: $this.projectiles,
+          serverMountains: $this.mountains,
           myId: socket.id
         })
 
