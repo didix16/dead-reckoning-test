@@ -7,8 +7,8 @@
     "build": "browserify src/game.js -o public/js/bundle.js",
     "watch": "chokidar \"src/**/*.js\" -c \"npm run build\"",
     "start": "node src/server.js",
-    "postinstall": "npm run build"
-    
+    "postinstall": "npm run build",
+    "test": "standard \"src/**/server.js\" \"src/**/game.js\" "
   },
   "repository": {
     "type": "git",
