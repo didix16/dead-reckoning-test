@@ -1,4 +1,4 @@
-/* globals io */
+/* globals io, window */
 
 // tool de test_ coverage && coverall
 // travis CI
@@ -21,7 +21,11 @@ canvas.width = window.innerWidth
 canvas.height = window.innerHeight
 document.body.appendChild(canvas)
 
+const eventHistory = document.querySelector('div.event-box .content')
+
 globals.addGlobal('canvas', canvas) // Make the canvas visible for all to render
+globals.addGlobal('eventHistory', eventHistory)
+globals.addGlobal('nickname', window.prompt('Introduce tu nickname', ''))
 
 const GameClient = require('./gameClient')
 

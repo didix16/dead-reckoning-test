@@ -223,7 +223,7 @@ class AmmoItem extends BaseItem
 }
 
 module.exports = AmmoItem
-},{"./baseItem":6,"./rectangle":20}],6:[function(require,module,exports){
+},{"./baseItem":6,"./rectangle":21}],6:[function(require,module,exports){
 let GameObject = require('./gameObject')
 class BaseItem extends GameObject
 {   
@@ -331,7 +331,7 @@ BaseItem.EFFECT = {
 };
 
 module.exports = BaseItem
-},{"./gameObject":12}],7:[function(require,module,exports){
+},{"./gameObject":13}],7:[function(require,module,exports){
 const GameObject = require('./gameObject')
 const Circle = require('./circle')
 class BaseProjectile extends GameObject
@@ -402,7 +402,7 @@ class BaseProjectile extends GameObject
 
 module.exports = BaseProjectile
 
-},{"./circle":8,"./gameObject":12}],8:[function(require,module,exports){
+},{"./circle":8,"./gameObject":13}],8:[function(require,module,exports){
 const Renderable = require('./renderable')
 class Circle extends Renderable
 {
@@ -435,8 +435,82 @@ class Circle extends Renderable
 
 module.exports = Circle
 
-},{"./renderable":22}],9:[function(require,module,exports){
-/* globals io */
+},{"./renderable":23}],9:[function(require,module,exports){
+let BaseItem = require('./baseItem')
+class FlagItem extends BaseItem
+{
+
+	constructor(o){
+
+        super(o);
+        this.setType(BaseItem.TYPE.FLAG);
+        this.effect = BaseItem.EFFECT.BONUS;
+
+        this.owner = o.owner || null;
+        this.body = null;
+        this.usable = false;
+        this.timestamp = o.timestamp || this.timestamp
+
+    }
+
+    onPickup(player){
+
+        player.bonus = {
+            increase: {
+                maxHealth: 500,
+                maxAmmo: 25,
+                defense: 2
+            },
+            timmer : setInterval(()=>{
+
+                player.score++;
+            },500)
+        }
+
+        for(let prop in player.bonus.increase){
+
+            player[prop] += player.bonus.increase[prop]
+        }
+
+        player.setHealth(player.health+player.bonus.increase.maxHealth);
+        player.ammo += player.bonus.increase.maxAmmo;
+    }
+
+    onDrop(player){
+
+        clearInterval(player.bonus.timmer);
+        for(let prop in player.bonus.increase){
+
+            player[prop] -= player.bonus.increase[prop]
+        }
+
+        player.setHealth(player.health-player.bonus.increase.maxHealth)
+        player.ammo -= player.bonus.increase.maxAmmo;
+        if(player.ammo < 0) player.ammo = 0
+        player.bonus = {}
+    }
+
+	render(){
+		
+        
+		this.gfx.save();
+        
+        let POS_W = - this.width/2
+        let POS_H = - this.height/2
+        this.gfx.translate(POS_W,POS_H);
+		this.gfx.font = this.width+"px FontAwesome";
+		this.gfx.fillStyle = "#FF0000";
+		this.gfx.fillText('\uf024',this.x , this.y);
+		this.gfx.restore();
+
+		return this;
+	};
+
+}
+
+module.exports = FlagItem
+},{"./baseItem":6}],10:[function(require,module,exports){
+/* globals io, window */
 
 // tool de test_ coverage && coverall
 // travis CI
@@ -459,7 +533,11 @@ canvas.width = window.innerWidth
 canvas.height = window.innerHeight
 document.body.appendChild(canvas)
 
+const eventHistory = document.querySelector('div.event-box .content')
+
 globals.addGlobal('canvas', canvas) // Make the canvas visible for all to render
+globals.addGlobal('eventHistory', eventHistory)
+globals.addGlobal('nickname', window.prompt('Introduce tu nickname', ''))
 
 const GameClient = require('./gameClient')
 
@@ -479,7 +557,7 @@ window.game = game
 
 game.run()
 
-},{"./gameClient":11,"./globals":13}],10:[function(require,module,exports){
+},{"./gameClient":12,"./globals":14}],11:[function(require,module,exports){
 const GameObject = require('./gameObject')
 /**
  * A camera that foucus the scene in some part of the game world or to a game object
@@ -531,7 +609,7 @@ class GameCamera extends GameObject {
 
 module.exports = GameCamera
 
-},{"./gameObject":12}],11:[function(require,module,exports){
+},{"./gameObject":13}],12:[function(require,module,exports){
 /* globals requestAnimationFrame, window, $  */
 let Render = require('./render')
 let Tank = require('./tank')
@@ -541,6 +619,7 @@ let Map = require("./map");
 let BaseItem = require('./baseItem')
 const HealthItem = require('./healthItem')
 const AmmoItem = require('./ammoItem')
+const FlagItem = require('./flagItem')
 let globals = require('./globals')
 globals.addGlobal('ACCEL', 1 / 1000);
 const ACCEL = globals.getGlobal("ACCEL");
@@ -548,12 +627,27 @@ const ACCEL = globals.getGlobal("ACCEL");
 let utils = require("./utils")
 let Network = require('./net')
 const deepEqual = require('deep-equal')
+// I use a improved version. I do the modifications here for compatibility in heroku
 const kb = require('@dasilvacontin/keyboard')
+var keyCodes = {
+  SPACE_BAR: 32,
+
+  LEFT_ARROW: 37,
+  UP_ARROW: 38,
+  RIGHT_ARROW: 39,
+  DOWN_ARROW: 40,
+  A: 65,
+  W: 85,
+  S: 83,
+  D: 68,
+  Q: 81
+}
 
 class GameClient {
 
   constructor (o) {
     let $this = this // self reference
+    this.eventHistory = globals.getGlobal('eventHistory')
     this.net = new Network(o.io,true)
     this.players = {}
     this.items = {}
@@ -561,6 +655,7 @@ class GameClient {
     this.lastLogic = 0
     this.clockDiff = 0
     this.myPlayerId = null
+    this.myNickname = globals.getGlobal('nickname')
     this.myInputs = {
       LEFT_ARROW: false,
       RIGHT_ARROW: false,
@@ -603,6 +698,8 @@ class GameClient {
       cY += this.map.CHUNK_SIZE;
     }
 
+    
+
     this.events = {
       onConnect(){
 
@@ -612,6 +709,7 @@ class GameClient {
 
       onWorldInit (data) {
         console.log('INCOMING_DATA',data)
+        $this.addEventHistory(`Welcome [${$this.myNickname}] to Tank.io. <br>You have to kill everyone, special who carry's <br>the flag!`)
         var playerIds = Object.keys(data.serverPlayers)
         let players = {}
 
@@ -666,16 +764,9 @@ class GameClient {
       },
 
       onItemSpawned (item) {
-        let alert = $("div.alert");
-        alert.text("A item has spawned!");
-        alert.addClass("show")
-        setTimeout(() => {
-          alert.addClass("animated fadeOut");
-        },2000);
-        alert.one('webkitAnimationEnd mozAnimationEnd MSAnimationEnd oanimationend animationend', function(){
 
-          alert.text("").removeClass("show fadeOut");
-        });
+        $this.showAlert("A item has spawned!");
+        $this.addEventHistory("A item has spawned!")
         
         switch(item.type){
 
@@ -696,10 +787,16 @@ class GameClient {
         switch(item.type){
 
           case BaseItem.TYPE.HEALTH:
+            let amount = player.health;
             player.heal(item.use())
+            let amount2 = player.health;
+            $this.addEventHistory(`<i class="fa fa-arrow-up"></i> We have <span style="color:green">restored +${amount2-amount} <i class="fa fa-heart"></i></span>`)
             break;
           case BaseItem.TYPE.AMMO:
+            let a = player.ammo;
             player.chargeAmmo(item.use())
+            let a2 = player.ammo;
+            $this.addEventHistory(`<i class="fa fa-arrow-up"></i> We have  <span style="color:green">charged +${a2-a} <i class="fa fa-rocket"></i></span>`)
             break;
         }
         delete $this.items[itemId]
@@ -709,7 +806,6 @@ class GameClient {
       },
 
       onPlayerHurt(player, projectile){
-        alert("famae")
         $this.players[player.id] = new Tank(player);
         $this.players[player.id].setHealth(player.health)
         delete $this.projectiles[projectile.id];
@@ -717,16 +813,14 @@ class GameClient {
 
       onPlayerDead(player, projectile){
 
-        let alert = $("div.alert");
-        alert.text(`You has been killed by [ ${$this.players[projectile.owner].nickname} ]!`);
-        alert.addClass("show")
-        setTimeout(() => {
-          alert.addClass("animated fadeOut");
-        },2000);
-        alert.one('webkitAnimationEnd mozAnimationEnd MSAnimationEnd oanimationend animationend', function(){
-
-          alert.text("").removeClass("show fadeOut");
-        });
+        if(player.id != $this.myPlayerId){
+          $this.showAlert(`You has been killed by [ ${$this.players[projectile.owner].nickname} ]!`);
+          $this.addEventHistory(`<i style="color:red" class="fa fa-thumbs-down"></i> You has been killed by <span style="color:orange">[ ${$this.players[projectile.owner].nickname} ]</span>`)
+        }
+        else{
+          $this.showAlert(`You has killed [ ${$this.players[player.id].nickname} ]!`)
+          $this.addEventHistory(`<i style="color:green" class="fa fa-thumbs-up"></i> You has killed <span style="color:orange">[ ${$this.players[player.id].nickname} ]</span>!`)
+        }
 
         $this.players[player.id] = new Tank(player);
         $this.players[player.id].setHealth(0)
@@ -739,16 +833,50 @@ class GameClient {
       },
 
       onNoMoveByDead(){
-        let alert = $("div.alert");
-        alert.text(`You are dead, so cannot move. Wait to respawn!`);
-        alert.addClass("show")
-        setTimeout(() => {
-          alert.addClass("animated fadeOut");
-        },2000);
-        alert.one('webkitAnimationEnd mozAnimationEnd MSAnimationEnd oanimationend animationend', function(){
+        $this.showAlert(`You are dead, so cannot move. Wait to respawn!`);
+        $this.addEventHistory(`<i style="color:red" class="fa fa-ban"></i> You are dead, so cannot move. Wait to respawn!`)
+        
+      },
 
-          alert.text("").removeClass("show fadeOut");
-        });
+      onFlagSpawned(flag){
+
+         $this.items['flag'] = new FlagItem(flag);
+         // Anounce to everyone
+         $this.showAlert(`The flag has spawned!`);
+         $this.addEventHistory(`<span style="color:green">The flag <i class="fa fa-flag"></i> has spawned!</span>`)
+      },
+
+      onFlagCollected(player, flag){
+
+        $this.items.flag = new FlagItem(flag);
+        $this.players[player.id] = new Tank(player);
+
+        if(flag.owner == this.myPlayerId){
+          $this.addEventHistory(`<i style="color:green" class="fa fa-flag"></i> You have <span style="color:green">picked up</span> the flag!`)
+        }else{
+          $this.addEventHistory(`< class="fa fa-flag"></i>Player <span style="color:orange">[ ${player.nickname} ]</span> picked up the flag!`)
+        }
+
+        // Anounce to everyone
+      },
+
+      onFlagDropped(player, flag){
+
+        $this.items.flag = new FlagItem(flag);
+        $this.players[player.id] = new Tank(player);
+        // Anounce to everyone
+      },
+
+      onPlayerWillRespawn(player, seconds){
+
+         $this.players[player.id] = new Tank(player);
+        // Anounce to me
+      },
+
+      onPlayerRespawned(player){
+
+         $this.players[player.id] = new Tank(player);
+         // Anounce to me (and maybe to everyone?)
       },
 
       onPlayerDisconnected (playerId) {
@@ -768,6 +896,13 @@ class GameClient {
       playerHurt: $this.events.onPlayerHurt.bind($this),
       playerDead: $this.events.onPlayerDead.bind($this),
       projectileExplode: $this.events.onProjectileExplode.bind($this),
+      
+      flagSpawned: $this.events.onFlagSpawned.bind($this),
+      flagCollected: $this.events.onFlagCollected.bind($this),
+      flagDropped: $this.events.onFlagDropped.bind($this),
+      playerWillRespawn: $this.events.onPlayerWillRespawn.bind($this),
+      playerRespawned: $this.events.onPlayerRespawned.bind($this),
+
       'NoMove:Dead': $this.events.onNoMoveByDead.bind($this),
       'game:pong': function (serverNow) {
         //console.log("GAME_PONG==>",serverNow);
@@ -780,14 +915,49 @@ class GameClient {
       }
     }
 
-    this.net.registerNetEvents(this.netEvents).init().send('gameJoin',{});
+    this.net.registerNetEvents(this.netEvents).init().send('gameJoin',{nickname: this.myNickname});
+  }
+
+  showAlert(message){
+    let alert = $("div.alert");
+    alert.text(message);
+    alert.addClass("show")
+    setTimeout(() => {
+      alert.addClass("animated fadeOut");
+    },2000);
+    alert.one('webkitAnimationEnd mozAnimationEnd MSAnimationEnd oanimationend animationend', function(){
+
+      alert.text("").removeClass("show fadeOut");
+    });
+
+    return this;
+  }
+
+  addEventHistory(text){
+
+    let d = new Date();
+
+    let h = d.getHours();
+    let m = d.getMinutes();
+    let s = d.getSeconds();
+    h = h < 10 ? "0"+h : h;
+    m = m < 10 ? "0"+m : m;
+    s = s < 10 ? "0"+s : s;
+    let dString = h+":"+m+":"+s
+    this.eventHistory.innerHTML += `[ ${dString} ]  `+text+"\n";
+    $(".event-box").animate({ scrollTop: $(document).height() }, "slow");
+
+    return this;
   }
 
   updatePlayer(player, targetTimestamp){
 
     //console.log("UPD_PLAYER=>",player)
     // dead reckoning
-    if(player.died) return
+    if(player.died){
+      player.timestamp = targetTimestamp
+      return
+    }
     let { x, y, vx, vy, ax, ay, vxDir, vyDir } = player
 
     //console.log(player);
@@ -905,7 +1075,8 @@ class GameClient {
     // Iterate over items
     for (let itemId in this.items) {
       let item = this.items[itemId]
-      item.render()
+      if(item.getType() !== BaseItem.TYPE.FLAG || item.getType() === BaseItem.TYPE.FLAG && this.items.flag.owner === -1)
+        item.render()
     }
 
     // Iterate over projectiles
@@ -1053,7 +1224,7 @@ class GameClient {
 
 module.exports = GameClient
 
-},{"./ammoItem":5,"./baseItem":6,"./baseProjectile":7,"./gameCamera":10,"./globals":13,"./healthItem":14,"./map":15,"./net":17,"./render":21,"./tank":24,"./utils":25,"@dasilvacontin/keyboard":1,"deep-equal":2}],12:[function(require,module,exports){
+},{"./ammoItem":5,"./baseItem":6,"./baseProjectile":7,"./flagItem":9,"./gameCamera":11,"./globals":14,"./healthItem":15,"./map":16,"./net":18,"./render":22,"./tank":25,"./utils":26,"@dasilvacontin/keyboard":1,"deep-equal":2}],13:[function(require,module,exports){
 const Renderable = require('./renderable')
 
 /**
@@ -1199,7 +1370,7 @@ class GameObject extends Renderable {
 
 module.exports = GameObject
 
-},{"./renderable":22}],13:[function(require,module,exports){
+},{"./renderable":23}],14:[function(require,module,exports){
 let globals = {
 
   vars: {},
@@ -1238,7 +1409,7 @@ let globals = {
 
 module.exports = globals
 
-},{}],14:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 let BaseItem = require('./baseItem')
 let Rectangle = require('./rectangle')
 class HealthItem extends BaseItem
@@ -1285,7 +1456,7 @@ class HealthItem extends BaseItem
 }
 
 module.exports = HealthItem
-},{"./baseItem":6,"./rectangle":20}],15:[function(require,module,exports){
+},{"./baseItem":6,"./rectangle":21}],16:[function(require,module,exports){
 const MapChunk = require('./mapChunk')
 /**
  * @class {Map} Map
@@ -1339,7 +1510,7 @@ class Map {
 
 module.exports = Map
 
-},{"./mapChunk":16}],16:[function(require,module,exports){
+},{"./mapChunk":17}],17:[function(require,module,exports){
 let Renderable = require("./renderable");
 let Rectangle = require("./rectangle");
 
@@ -1398,7 +1569,7 @@ class MapChunk extends Renderable {
 
 module.exports = MapChunk
 
-},{"./rectangle":20,"./renderable":22}],17:[function(require,module,exports){
+},{"./rectangle":21,"./renderable":23}],18:[function(require,module,exports){
 // Dead reckoning - Algorithm
 
 // Rocket legue -> Simulation + Redo
@@ -1547,7 +1718,7 @@ class Network {
 
 module.exports = Network
 
-},{}],18:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 const GameObject = require('./gameObject')
 
 /**
@@ -1563,12 +1734,14 @@ class Player extends GameObject {
         this.timestamp = 0 || timestamp
         this.nickname = nickname || ""
         this.bonus = {}
+        this.timesDead = 0
+        this.score = 0
     }
 }
 
 module.exports = Player
 
-},{"./gameObject":12}],19:[function(require,module,exports){
+},{"./gameObject":13}],20:[function(require,module,exports){
 const Renderable = require('./renderable')
 class Point extends Renderable
 {
@@ -1592,7 +1765,7 @@ class Point extends Renderable
 
 module.exports = Point
 
-},{"./renderable":22}],20:[function(require,module,exports){
+},{"./renderable":23}],21:[function(require,module,exports){
 const Point = require('./point')
 const Renderable = require('./renderable')
 class Rectangle extends Renderable {
@@ -1658,7 +1831,7 @@ class Rectangle extends Renderable {
 
 module.exports = Rectangle
 
-},{"./point":19,"./renderable":22}],21:[function(require,module,exports){
+},{"./point":20,"./renderable":23}],22:[function(require,module,exports){
 let globals = require('./globals');
 class Render {
 
@@ -1692,7 +1865,7 @@ if(!globals.getGlobal("SERVER")){
 }else{
   module.exports = null
 }
-},{"./globals":13}],22:[function(require,module,exports){
+},{"./globals":14}],23:[function(require,module,exports){
 const Render = require('./render') // Instance of GFX
 let globals = require('./globals');
 /**
@@ -1723,7 +1896,7 @@ class Renderable {
 module.exports = Renderable
 
 
-},{"./globals":13,"./render":21}],23:[function(require,module,exports){
+},{"./globals":14,"./render":22}],24:[function(require,module,exports){
 /* globals window */
 const globals = require("./globals");
 
@@ -1878,7 +2051,7 @@ class Segment extends Renderable
 
 module.exports = Segment
 
-},{"./globals":13,"./point":19,"./renderable":22,"./vector":26}],24:[function(require,module,exports){
+},{"./globals":14,"./point":20,"./renderable":23,"./vector":27}],25:[function(require,module,exports){
 let globals = require('./globals');
 const utils = require('./utils')
 const Player = require('./player')
@@ -1892,9 +2065,11 @@ class Tank extends Player
   constructor (o) {
     super(o.id, o.x, o.y, o.width, o.height, o.radius, o.timestamp,o.nickname)
 
-    this.health = o.health ? o.health : 100
+    this.health = o.died ? 0 : (o.health ? o.health : 100)
     this.maxHealth = o.maxHealth ? o.maxHealth : 100
+
     this.died = o.died || false
+    this.timesDead = o.timesDead || 0
     this.ammo = o.ammo !== undefined ? o.ammo : 10
     this.maxAmmo = o.maxAmmo || 10
     this.defense = o.defense || 0
@@ -1904,6 +2079,8 @@ class Tank extends Player
     this.healthBarOffset = 30
     this.healthBar = new Segment(this.x, this.y - this.healthBarOffset, 40, 0, 5)
     this.maxHealthBarX = this.healthBar.vecx + 2
+
+    this.setHealth(this.health); // refresh the healthbar
 
         // Unit director vector and shortcut degrees
     this.orientation = {
@@ -2051,7 +2228,7 @@ class Tank extends Player
 
     var width = this.health * (this.maxHealthBarX - 2) / this.maxHealth
     this.healthBar.vecx = width
-    return this.died;
+    return !this.died;
   }
 
   heal (amountHealth) {
@@ -2088,6 +2265,11 @@ class Tank extends Player
     this.body.rotate(utils.degreeToRadian(this.orientation.degree),"#3A5320",true)
     this.gfx.restore();
 
+    this.gfx.save()
+    this.gfx.textAlign = "center"
+    this.gfx.fillText(this.nickname, this.x, this.y+this.height/2+5);
+    this.gfx.restore()
+
     this.gfx.translate(-this.turret.base.width,-this.turret.base.height)
     if (this.turret.orientation !== 0 && this.turret.orientation !== 360) {
       var rad = utils.degreeToRadian(this.turret.orientation)
@@ -2110,7 +2292,7 @@ class Tank extends Player
   drawHealthBar () {
     this.gfx.save()
     let POS_W = (-this.maxHealthBarX+2)/2;
-    /*if(this.carryFlag){
+    if(this.carryFlag){
 
       this.gfx.save()
       this.gfx.translate(POS_W-20,0);
@@ -2121,7 +2303,7 @@ class Tank extends Player
       this.gfx.strokeText('\uf024', this.healthBar.x +1,this.healthBar.y );
       this.gfx.restore();
 
-    }*/
+    }
     this.gfx.translate(POS_W,0);
     this.gfx.fillStyle = 'black'
     this.gfx.fillRect(this.healthBar.x - 1, this.healthBar.y - 3, this.maxHealthBarX, this.healthBar.width + 1)
@@ -2132,10 +2314,9 @@ class Tank extends Player
   };
 
 }
-
 module.exports = Tank
 
-},{"./baseProjectile":7,"./globals":13,"./player":18,"./rectangle":20,"./segment":23,"./utils":25}],25:[function(require,module,exports){
+},{"./baseProjectile":7,"./globals":14,"./player":19,"./rectangle":21,"./segment":24,"./utils":26}],26:[function(require,module,exports){
 let globals = require("./globals")
 let ACCEL = globals.getGlobal("ACCEL");
 if(!ACCEL){
@@ -2173,7 +2354,7 @@ module.exports = {
 
 }
 
-},{"./globals":13}],26:[function(require,module,exports){
+},{"./globals":14}],27:[function(require,module,exports){
 const Renderable = require('./renderable')
 class Vector extends Renderable
 {
@@ -2227,4 +2408,4 @@ class Vector extends Renderable
 
 module.exports = Vector
 
-},{"./renderable":22}]},{},[9]);
+},{"./renderable":23}]},{},[10]);

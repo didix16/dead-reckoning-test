@@ -11,7 +11,8 @@ const Tank = require("./tank");
 let BaseItem = require('./baseItem')
 const HealthItem = require('./healthItem')
 const AmmoItem = require('./ammoItem')
-
+const FlagItem = require('./flagItem')
+const GameWorld = require('./gameWorld')
 
 
 class GameServer {
@@ -19,6 +20,7 @@ class GameServer {
   constructor (socketIO) {
     this.players = {}
     this.items = {}
+    this.world = new GameWorld(4000,4000)
     this.projectiles = {}
     this.nextItemId = 0
     this.nextProjectileId = 0
@@ -26,6 +28,23 @@ class GameServer {
     this.lastItemSpawn = Date.now()
     let $this = this // self reference
 
+    // Spawn the flag 
+    setTimeout(()=>{
+
+      this.items.flag = new FlagItem({
+        id: "flag",
+          x: Math.random() * 1000 ,
+          y: Math.random() * 1000,
+          owner: -1,
+          width: 32,
+          height: 32,
+          radius: 32,
+          timestamp: this.lastItemSpawn
+      });
+
+      console.log("The flag has spawned!!")
+      $this.net.send("flagSpawned", this.items.flag);
+    },20000)
     // Generate a few items
     /*for (let i = 0; i < 10; ++i) {
       const item = {
@@ -41,10 +60,10 @@ class GameServer {
         this.emit('game:pong', Date.now())
       },
 
-      gameJoin: function(){
+      gameJoin: function(data){
 
         console.log("A user has requested to join the server.")
-        $this.events.onPlayerConnected(this);
+        $this.events.onPlayerConnected(this,data.nickname);
       },
 
       move: function (inputs) {
@@ -70,7 +89,7 @@ class GameServer {
     this.events = {
 
 
-      onPlayerConnected (socket) {
+      onPlayerConnected (socket, nickname) {
         console.log(`${socket.id} connected`)
         const inputs = {
           LEFT_ARROW: false,
@@ -89,7 +108,7 @@ class GameServer {
           x: Math.random() * 500,
           y: Math.random() * 500,
           width: 50,
-          nickname: "Player - "+Object.keys($this.players).length,
+          nickname: nickname,
           height: 50,
           radius: 30,
           vx: 0,
@@ -128,16 +147,15 @@ class GameServer {
           return
         }
 
+        const now = Date.now()
+        $this.updatePlayer(player, now)
+
         if(player.died){
           socket.emit("NoMove:Dead",{});
           return
         }
-        console.log(`${new Date()}: ${socket.id} moved`)
 
-        
-        
-        const now = Date.now()
-        $this.updatePlayer(player, now)
+        console.log(`${new Date()}: ${socket.id} moved`)
 
         player.inputs = inputs
         utils.calculatePlayerAcceleration(player)
@@ -155,6 +173,11 @@ class GameServer {
         const now = Date.now()
         $this.updatePlayer(player, now)
 
+        if(player.died){
+          socket.emit("NoMove:Dead",{});
+          return
+        }
+
         player.inputs = inputs
         if(player.inputs.A)
           player.rotateTurret(4);
@@ -170,13 +193,21 @@ class GameServer {
 
         const player = $this.players[socket.id]
         const now = Date.now()
-        $this.updatePlayer(player, now)
 
         if(!player){
 
           socket.disconnect(true)
           return
         }
+
+        $this.updatePlayer(player, now)
+
+        if(player.died){
+          socket.emit("NoMove:Dead",{});
+          return
+        }
+
+        
         player.inputs = inputs
 
         if(player.ammo > 0 && player.inputs.SPACE_BAR){
@@ -199,6 +230,17 @@ class GameServer {
 
       onPlayerDisconnected (socket) {
         console.log(`${socket.id} disconnected`)
+        let player = $this.players[socket.id];
+        if(player && player.carryFlag){
+            let flag = $this.items.flag;
+            flag.owner = -1;
+            flag.x = player.x - player.width;
+            flag.y = player.y
+            if(flag.x > $this.world.map.width /2 || flag.x < -$this.world.map.width/2) flag.x = Math.floor(Math.random() * $this.map.width/2) - $this.world.map.width/4
+            if(flag.y > $this.world.map.height /2 || flag.y < -$this.world.map.height/2) flag.y = Math.floor(Math.random() * $this.map.height/2) - $this.world.map.height/4
+            $this.net.send('flagDropped',player, flag)
+          }
+
         delete $this.players[socket.id]
         socket.broadcast.emit('playerDisconnected', socket.id)
       }
@@ -210,7 +252,11 @@ class GameServer {
 
   updatePlayer(player, targetTimestamp){
 
-    if(!player || player.died) return // Avoid null player (In some cases here arrives a null :S) or player dead
+    if(!player) return // Avoid null player (In some cases here arrives a null :S) or player dead
+    if(player.died){
+      player.timestamp = targetTimestamp
+      return
+    }
     let { x, y, vx, vy, ax, ay, vxDir, vyDir } = player
 
     //console.log('UPDT_PLAYER==>', x,y,vx,vy,ax,ay);
@@ -264,13 +310,23 @@ class GameServer {
           if(item.getType() === BaseItem.TYPE.HEALTH){
             let hp = item.use()
             player.heal(hp);
+            delete this.items[itemId]
+            this.net.send('itemCollected', player.id, itemId)
           }else if(item.getType() === BaseItem.TYPE.AMMO){
             let ammo = item.use()
             player.chargeAmmo(ammo);
+            delete this.items[itemId]
+            this.net.send('itemCollected', player.id, itemId)
+          }else if(item.owner === -1 && item.getType() === BaseItem.TYPE.FLAG){
+
+            player.carryFlag = true;
+            item.owner = player.id;
+            item.onPickup(player);
+            this.net.send('flagCollected', player,item)
           }
-          delete this.items[itemId]
+          
           //player.score++
-          this.net.send('itemCollected', player.id, itemId)
+          
         }
       }
 
@@ -296,8 +352,24 @@ class GameServer {
               console.log("Player hurt!")
               this.net.send('playerHurt',player, projectile)
             }else{
-               console.log("Player died!")
+              console.log("Player died!")
               this.net.send('playerDead',player,projectile)
+              player.timesDead++;
+              player.score -= 100
+              this.players[projectile.owner] += 100
+              if(player.carryFlag){
+                player.carryFlag = false;
+                let flag = this.items.flag;
+                flag.owner = -1;
+                flag.onDrop(player)
+                flag.x = player.x - player.width;
+                flag.y = player.y
+
+                if(flag.x > this.world.map.width /2 || flag.x < -this.world.map.width/2) flag.x = Math.floor(Math.random() * this.world.map.width/2) - this.world.map.width/4
+                if(flag.y > this.world.map.height /2 || flag.y < -this.world.map.height/2) flag.y = Math.floor(Math.random() * this.world.map.height/2) - this.world.map.height/4
+                this.net.send('flagDropped',player, this.items.flag)
+              }
+              this.playerRespawner(player)
             }
             delete this.projectiles[projId];
           }
@@ -357,6 +429,26 @@ class GameServer {
       this.lastItemSpawn = now
       this.net.broadcast('itemSpawned', item)
     }
+  }
+
+  playerRespawner(player){
+
+    let inSeconds = 5*player.timesDead;
+    setTimeout(()=>{
+
+      player.maxHealth = 100;
+      player.setHealth(100)
+      player.defense = 0;
+      player.ammo = 10;
+      player.maxAmmo = 10;
+      player.x =  Math.random() * 1000;
+      player.y =  Math.random() * 1000;
+      player.timestamp = Date.now()
+      
+      this.net.send('playerRespawned',player)
+
+    },inSeconds*1000-this.net.ping);
+    this.net.send('playerWillRespawn',player,inSeconds)
   }
 
   run (loopInterval) {

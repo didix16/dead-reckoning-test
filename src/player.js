@@ -13,6 +13,8 @@ class Player extends GameObject {
         this.timestamp = 0 || timestamp
         this.nickname = nickname || ""
         this.bonus = {}
+        this.timesDead = 0
+        this.score = 0
     }
 }
 

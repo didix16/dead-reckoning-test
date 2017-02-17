@@ -7,6 +7,7 @@ let Map = require("./map");
 let BaseItem = require('./baseItem')
 const HealthItem = require('./healthItem')
 const AmmoItem = require('./ammoItem')
+const FlagItem = require('./flagItem')
 let globals = require('./globals')
 globals.addGlobal('ACCEL', 1 / 1000);
 const ACCEL = globals.getGlobal("ACCEL");
@@ -14,12 +15,27 @@ const ACCEL = globals.getGlobal("ACCEL");
 let utils = require("./utils")
 let Network = require('./net')
 const deepEqual = require('deep-equal')
+// I use a improved version. I do the modifications here for compatibility in heroku
 const kb = require('@dasilvacontin/keyboard')
+var keyCodes = {
+  SPACE_BAR: 32,
+
+  LEFT_ARROW: 37,
+  UP_ARROW: 38,
+  RIGHT_ARROW: 39,
+  DOWN_ARROW: 40,
+  A: 65,
+  W: 85,
+  S: 83,
+  D: 68,
+  Q: 81
+}
 
 class GameClient {
 
   constructor (o) {
     let $this = this // self reference
+    this.eventHistory = globals.getGlobal('eventHistory')
     this.net = new Network(o.io,true)
     this.players = {}
     this.items = {}
@@ -27,6 +43,7 @@ class GameClient {
     this.lastLogic = 0
     this.clockDiff = 0
     this.myPlayerId = null
+    this.myNickname = globals.getGlobal('nickname')
     this.myInputs = {
       LEFT_ARROW: false,
       RIGHT_ARROW: false,
@@ -69,6 +86,8 @@ class GameClient {
       cY += this.map.CHUNK_SIZE;
     }
 
+    
+
     this.events = {
       onConnect(){
 
@@ -78,6 +97,7 @@ class GameClient {
 
       onWorldInit (data) {
         console.log('INCOMING_DATA',data)
+        $this.addEventHistory(`Welcome [${$this.myNickname}] to Tank.io. <br>You have to kill everyone, special who carry's <br>the flag!`)
         var playerIds = Object.keys(data.serverPlayers)
         let players = {}
 
@@ -132,16 +152,9 @@ class GameClient {
       },
 
       onItemSpawned (item) {
-        let alert = $("div.alert");
-        alert.text("A item has spawned!");
-        alert.addClass("show")
-        setTimeout(() => {
-          alert.addClass("animated fadeOut");
-        },2000);
-        alert.one('webkitAnimationEnd mozAnimationEnd MSAnimationEnd oanimationend animationend', function(){
 
-          alert.text("").removeClass("show fadeOut");
-        });
+        $this.showAlert("A item has spawned!");
+        $this.addEventHistory("A item has spawned!")
         
         switch(item.type){
 
@@ -162,10 +175,16 @@ class GameClient {
         switch(item.type){
 
           case BaseItem.TYPE.HEALTH:
+            let amount = player.health;
             player.heal(item.use())
+            let amount2 = player.health;
+            $this.addEventHistory(`<i class="fa fa-arrow-up"></i> We have <span style="color:green">restored +${amount2-amount} <i class="fa fa-heart"></i></span>`)
             break;
           case BaseItem.TYPE.AMMO:
+            let a = player.ammo;
             player.chargeAmmo(item.use())
+            let a2 = player.ammo;
+            $this.addEventHistory(`<i class="fa fa-arrow-up"></i> We have  <span style="color:green">charged +${a2-a} <i class="fa fa-rocket"></i></span>`)
             break;
         }
         delete $this.items[itemId]
@@ -175,7 +194,6 @@ class GameClient {
       },
 
       onPlayerHurt(player, projectile){
-        alert("famae")
         $this.players[player.id] = new Tank(player);
         $this.players[player.id].setHealth(player.health)
         delete $this.projectiles[projectile.id];
@@ -183,16 +201,14 @@ class GameClient {
 
       onPlayerDead(player, projectile){
 
-        let alert = $("div.alert");
-        alert.text(`You has been killed by [ ${$this.players[projectile.owner].nickname} ]!`);
-        alert.addClass("show")
-        setTimeout(() => {
-          alert.addClass("animated fadeOut");
-        },2000);
-        alert.one('webkitAnimationEnd mozAnimationEnd MSAnimationEnd oanimationend animationend', function(){
-
-          alert.text("").removeClass("show fadeOut");
-        });
+        if(player.id != $this.myPlayerId){
+          $this.showAlert(`You has been killed by [ ${$this.players[projectile.owner].nickname} ]!`);
+          $this.addEventHistory(`<i style="color:red" class="fa fa-thumbs-down"></i> You has been killed by <span style="color:orange">[ ${$this.players[projectile.owner].nickname} ]</span>`)
+        }
+        else{
+          $this.showAlert(`You has killed [ ${$this.players[player.id].nickname} ]!`)
+          $this.addEventHistory(`<i style="color:green" class="fa fa-thumbs-up"></i> You has killed <span style="color:orange">[ ${$this.players[player.id].nickname} ]</span>!`)
+        }
 
         $this.players[player.id] = new Tank(player);
         $this.players[player.id].setHealth(0)
@@ -205,16 +221,50 @@ class GameClient {
       },
 
       onNoMoveByDead(){
-        let alert = $("div.alert");
-        alert.text(`You are dead, so cannot move. Wait to respawn!`);
-        alert.addClass("show")
-        setTimeout(() => {
-          alert.addClass("animated fadeOut");
-        },2000);
-        alert.one('webkitAnimationEnd mozAnimationEnd MSAnimationEnd oanimationend animationend', function(){
+        $this.showAlert(`You are dead, so cannot move. Wait to respawn!`);
+        $this.addEventHistory(`<i style="color:red" class="fa fa-ban"></i> You are dead, so cannot move. Wait to respawn!`)
+        
+      },
 
-          alert.text("").removeClass("show fadeOut");
-        });
+      onFlagSpawned(flag){
+
+         $this.items['flag'] = new FlagItem(flag);
+         // Anounce to everyone
+         $this.showAlert(`The flag has spawned!`);
+         $this.addEventHistory(`<span style="color:green">The flag <i class="fa fa-flag"></i> has spawned!</span>`)
+      },
+
+      onFlagCollected(player, flag){
+
+        $this.items.flag = new FlagItem(flag);
+        $this.players[player.id] = new Tank(player);
+
+        if(flag.owner == this.myPlayerId){
+          $this.addEventHistory(`<i style="color:green" class="fa fa-flag"></i> You have <span style="color:green">picked up</span> the flag!`)
+        }else{
+          $this.addEventHistory(`< class="fa fa-flag"></i>Player <span style="color:orange">[ ${player.nickname} ]</span> picked up the flag!`)
+        }
+
+        // Anounce to everyone
+      },
+
+      onFlagDropped(player, flag){
+
+        $this.items.flag = new FlagItem(flag);
+        $this.players[player.id] = new Tank(player);
+        // Anounce to everyone
+      },
+
+      onPlayerWillRespawn(player, seconds){
+
+         $this.players[player.id] = new Tank(player);
+        // Anounce to me
+      },
+
+      onPlayerRespawned(player){
+
+         $this.players[player.id] = new Tank(player);
+         // Anounce to me (and maybe to everyone?)
       },
 
       onPlayerDisconnected (playerId) {
@@ -234,6 +284,13 @@ class GameClient {
       playerHurt: $this.events.onPlayerHurt.bind($this),
       playerDead: $this.events.onPlayerDead.bind($this),
       projectileExplode: $this.events.onProjectileExplode.bind($this),
+      
+      flagSpawned: $this.events.onFlagSpawned.bind($this),
+      flagCollected: $this.events.onFlagCollected.bind($this),
+      flagDropped: $this.events.onFlagDropped.bind($this),
+      playerWillRespawn: $this.events.onPlayerWillRespawn.bind($this),
+      playerRespawned: $this.events.onPlayerRespawned.bind($this),
+
       'NoMove:Dead': $this.events.onNoMoveByDead.bind($this),
       'game:pong': function (serverNow) {
         //console.log("GAME_PONG==>",serverNow);
@@ -246,14 +303,49 @@ class GameClient {
       }
     }
 
-    this.net.registerNetEvents(this.netEvents).init().send('gameJoin',{});
+    this.net.registerNetEvents(this.netEvents).init().send('gameJoin',{nickname: this.myNickname});
+  }
+
+  showAlert(message){
+    let alert = $("div.alert");
+    alert.text(message);
+    alert.addClass("show")
+    setTimeout(() => {
+      alert.addClass("animated fadeOut");
+    },2000);
+    alert.one('webkitAnimationEnd mozAnimationEnd MSAnimationEnd oanimationend animationend', function(){
+
+      alert.text("").removeClass("show fadeOut");
+    });
+
+    return this;
+  }
+
+  addEventHistory(text){
+
+    let d = new Date();
+
+    let h = d.getHours();
+    let m = d.getMinutes();
+    let s = d.getSeconds();
+    h = h < 10 ? "0"+h : h;
+    m = m < 10 ? "0"+m : m;
+    s = s < 10 ? "0"+s : s;
+    let dString = h+":"+m+":"+s
+    this.eventHistory.innerHTML += `[ ${dString} ]  `+text+"\n";
+    $(".event-box").animate({ scrollTop: $(document).height() }, "slow");
+
+    return this;
   }
 
   updatePlayer(player, targetTimestamp){
 
     //console.log("UPD_PLAYER=>",player)
     // dead reckoning
-    if(player.died) return
+    if(player.died){
+      player.timestamp = targetTimestamp
+      return
+    }
     let { x, y, vx, vy, ax, ay, vxDir, vyDir } = player
 
     //console.log(player);
@@ -371,7 +463,8 @@ class GameClient {
     // Iterate over items
     for (let itemId in this.items) {
       let item = this.items[itemId]
-      item.render()
+      if(item.getType() !== BaseItem.TYPE.FLAG || item.getType() === BaseItem.TYPE.FLAG && this.items.flag.owner === -1)
+        item.render()
     }
 
     // Iterate over projectiles
