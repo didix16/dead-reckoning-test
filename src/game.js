@@ -22,9 +22,11 @@ canvas.height = window.innerHeight
 document.body.appendChild(canvas)
 
 const eventHistory = document.querySelector('div.event-box .content')
+const leaderboard = document.querySelector('div.leaderbox .content')
 
 globals.addGlobal('canvas', canvas) // Make the canvas visible for all to render
 globals.addGlobal('eventHistory', eventHistory)
+globals.addGlobal('leaderboard', leaderboard)
 globals.addGlobal('nickname', window.prompt('Introduce tu nickname', ''))
 
 const GameClient = require('./gameClient')

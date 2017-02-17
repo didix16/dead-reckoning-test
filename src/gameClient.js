@@ -36,8 +36,10 @@ class GameClient {
   constructor (o) {
     let $this = this // self reference
     this.eventHistory = globals.getGlobal('eventHistory')
+    this.leaderBoard = globals.getGlobal('leaderboard')
     this.net = new Network(o.io,true)
     this.players = {}
+    this.ranking = []
     this.items = {}
     this.projectiles = {}
     this.lastLogic = 0
@@ -106,6 +108,7 @@ class GameClient {
           players[playerId] = new Tank(data.serverPlayers[playerId])
         })
         $this.players = players
+        $this.updateRanking();
 
         var itemIds = Object.keys(data.serverItems)
         itemIds.forEach(function (itemId) {
@@ -135,7 +138,13 @@ class GameClient {
 
       onPlayerMoved (player) {
         console.log("ARRIVING_PLAYER==>",player)
+        if(!$this.players[player.id]){
+          $this.showAlert(`Player [${player.nickname}] is ready for the party!`)
+          $this.addEventHistory(`<i class="fa fa-user"></i> Player [${player.nickname}] is ready for the party!`)
+        }
         $this.players[player.id] = new Tank(player);
+  
+        $this.updateRanking();
 
         console.log("PLAYER_AFTER_INIT_TANK==>",$this.players[player.id])
       },
@@ -195,6 +204,7 @@ class GameClient {
 
       onPlayerHurt(player, projectile){
         $this.players[player.id] = new Tank(player);
+        this.updateRanking();
         $this.players[player.id].setHealth(player.health)
         delete $this.projectiles[projectile.id];
       },
@@ -211,6 +221,7 @@ class GameClient {
         }
 
         $this.players[player.id] = new Tank(player);
+        $this.updateRanking();
         $this.players[player.id].setHealth(0)
         delete $this.projectiles[projectile.id];
       },
@@ -238,8 +249,10 @@ class GameClient {
 
         $this.items.flag = new FlagItem(flag);
         $this.players[player.id] = new Tank(player);
+        $this.updateRanking();
 
         if(flag.owner == this.myPlayerId){
+          $this.showAlert(`You have picked up the flag!`);
           $this.addEventHistory(`<i style="color:green" class="fa fa-flag"></i> You have <span style="color:green">picked up</span> the flag!`)
         }else{
           $this.addEventHistory(`< class="fa fa-flag"></i>Player <span style="color:orange">[ ${player.nickname} ]</span> picked up the flag!`)
@@ -252,11 +265,14 @@ class GameClient {
 
         $this.items.flag = new FlagItem(flag);
         $this.players[player.id] = new Tank(player);
+        $this.updateRanking();
         // Anounce to everyone
       },
 
       onPlayerWillRespawn(player, seconds){
 
+        $this.showAlert(`You will be respawned in ${seconds} seconds! Hold on...`);
+        $this.addEventHistory(`<i style="color:black" class="fa fa-ambulance"></i> You will be respawned in ${seconds} seconds! Hold on...`)
          $this.players[player.id] = new Tank(player);
         // Anounce to me
       },
@@ -264,11 +280,13 @@ class GameClient {
       onPlayerRespawned(player){
 
          $this.players[player.id] = new Tank(player);
+         $this.updateRanking();
          // Anounce to me (and maybe to everyone?)
       },
 
       onPlayerDisconnected (playerId) {
         delete $this.players[playerId]
+        $this.updateRanking();
       }
     }
     
@@ -336,6 +354,34 @@ class GameClient {
     $(".event-box").animate({ scrollTop: $(document).height() }, "slow");
 
     return this;
+  }
+
+  updateRanking(){
+
+    this.ranking = [];
+
+    for(let pId in this.players){
+
+      this.ranking.push(this.players[pId]);
+    }
+
+    this.ranking.sort(function(a,b){
+
+      if(a.score > b.score) return -1
+      else if(a.score < b.score) return 1
+      else return 0
+    });
+    
+    this.leaderBoard.innerHTML = "";
+    for(let i in this.ranking){
+
+      let p = this.ranking[i];
+      let idx = parseInt(i)+1;
+      this.leaderBoard.innerHTML += `${idx}. ${p.nickname} - ${p.score}`
+    }
+
+    return this;
+    
   }
 
   updatePlayer(player, targetTimestamp){

@@ -62,6 +62,50 @@
                 padding-right: 5px;
                 white-space: pre;
             }
+
+            div.leaderbox {
+                position: absolute;
+                width: 20%;
+                height: 45%;
+                overflow-y: scroll;
+                background: hsla(0, 0%, 0%, 0.3);
+                top: 0%;
+                left: 80%;
+                transform: translate(0%, 0);
+                color: white;
+                text-shadow: 1px 0 0 #000, -2px 0 0 #000, 0 2px 0 #000, 0 -2px 0 #000, 1px 1px #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+                font-family: "Arial";
+                font-size: 12px;
+                
+            }
+
+            div.leaderbox::-webkit-scrollbar
+            {
+                width: 0px;
+            }
+            div.leaderbox::-webkit-scrollbar-track-piece
+            {
+                background-color: transparent;
+                -webkit-border-radius: 6px;
+                border-radius: 6px;
+            }
+
+            div.leaderbox .content{
+                padding-left: 5px;
+                padding-top: 5px;
+                padding-right: 5px;
+                white-space: pre;
+            }
+
+            div.leaderbox .header {
+                border-bottom: 1px solid;
+            }
+            div.leaderbox .title {
+                width: 70px;
+                margin: 0 auto;
+                font-size: 18px;
+                
+            }
         </style>
         
         <link rel="stylesheet" href="./css/animate.css" type="text/css">
@@ -69,6 +113,13 @@
     </head>
     <body>
         <div class="alert"></div>
+        <div class="leaderbox">
+            <div class="header">
+                <div class="title"> LeaderBoard </div>
+            </div>
+            
+            <div class="content"></div>
+        </div>
         <div class="event-box">
             <div class="content"></div>
         </div>
