@@ -404,7 +404,7 @@ class GameServer {
     let now = Date.now();
     if ( now - this.lastItemSpawn > 10000) {
       
-      let type = Math.floor(Math.random() * 2)
+      let type = Math.floor(Math.random() * 4)
       let item = null;
       switch(type){
         case 0:
@@ -420,6 +420,8 @@ class GameServer {
           });
           break;
         case 1:
+        case 2:
+        case 3:
           item = new AmmoItem({
             id: this.nextItemId,
             x: 0 ,
