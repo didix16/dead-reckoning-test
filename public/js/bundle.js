@@ -1,53 +1,4 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-'use strict'
-var keys = []
-exports.debug = false
-
-var keyCodes = {
-  SPACE_BAR: 32,
-
-  LEFT_ARROW: 37,
-  UP_ARROW: 38,
-  RIGHT_ARROW: 39,
-  DOWN_ARROW: 40,
-  A: 65,
-  W: 85,
-  S: 83,
-  D: 68,
-  Q: 81
-}
-for (var keyName in keyCodes) {
-  exports[keyName] = keyCodes[keyName]
-}
-
-exports.isKeyDown = function (keyCode) {
-  if (typeof keyCode === 'number') return Boolean(keys[keyCode])
-  if (typeof keyCode === 'string' && keyCode.length === 1) {
-    var letter = keyCode.toUpperCase()
-    return Boolean(keys[letter.charCodeAt(0)])
-  }
-  throw new TypeError(
-    '`isKeyDown` expected keyCode (`number`) or character. Got ' + keyCode + '.'
-  )
-}
-
-document.addEventListener('keydown', function (e) {
-  keys[e.keyCode] = true
-  if (exports.debug) {
-    var letter = String.fromCharCode(e.keyCode)
-    console.log('-- keyIsDown ASCII(' + e.keyCode + ') CHAR(' + letter + ')')
-  }
-})
-
-document.addEventListener('keyup', function (e) {
-  keys[e.keyCode] = false
-  if (exports.debug) {
-    var letter = String.fromCharCode(e.keyCode)
-    console.log('-- keyIsUp ASCII(' + e.keyCode + ') CHAR(' + letter + ')')
-  }
-})
-
-},{}],2:[function(require,module,exports){
 var pSlice = Array.prototype.slice;
 var objectKeys = require('./lib/keys.js');
 var isArguments = require('./lib/is_arguments.js');
@@ -143,7 +94,7 @@ function objEquiv(a, b, opts) {
   return typeof a === typeof b;
 }
 
-},{"./lib/is_arguments.js":3,"./lib/keys.js":4}],3:[function(require,module,exports){
+},{"./lib/is_arguments.js":2,"./lib/keys.js":3}],2:[function(require,module,exports){
 var supportsArgumentsClass = (function(){
   return Object.prototype.toString.call(arguments)
 })() == '[object Arguments]';
@@ -165,7 +116,7 @@ function unsupported(object){
     false;
 };
 
-},{}],4:[function(require,module,exports){
+},{}],3:[function(require,module,exports){
 exports = module.exports = typeof Object.keys === 'function'
   ? Object.keys : shim;
 
@@ -176,7 +127,7 @@ function shim (obj) {
   return keys;
 }
 
-},{}],5:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 let BaseItem = require('./baseItem')
 let Rectangle = require('./rectangle')
 class AmmoItem extends BaseItem
@@ -223,7 +174,7 @@ class AmmoItem extends BaseItem
 }
 
 module.exports = AmmoItem
-},{"./baseItem":6,"./rectangle":21}],6:[function(require,module,exports){
+},{"./baseItem":5,"./rectangle":21}],5:[function(require,module,exports){
 let GameObject = require('./gameObject')
 class BaseItem extends GameObject
 {   
@@ -331,7 +282,7 @@ BaseItem.EFFECT = {
 };
 
 module.exports = BaseItem
-},{"./gameObject":13}],7:[function(require,module,exports){
+},{"./gameObject":12}],6:[function(require,module,exports){
 const GameObject = require('./gameObject')
 const Circle = require('./circle')
 class BaseProjectile extends GameObject
@@ -402,7 +353,7 @@ class BaseProjectile extends GameObject
 
 module.exports = BaseProjectile
 
-},{"./circle":8,"./gameObject":13}],8:[function(require,module,exports){
+},{"./circle":7,"./gameObject":12}],7:[function(require,module,exports){
 const Renderable = require('./renderable')
 class Circle extends Renderable
 {
@@ -435,7 +386,7 @@ class Circle extends Renderable
 
 module.exports = Circle
 
-},{"./renderable":23}],9:[function(require,module,exports){
+},{"./renderable":23}],8:[function(require,module,exports){
 let BaseItem = require('./baseItem')
 class FlagItem extends BaseItem
 {
@@ -509,7 +460,7 @@ class FlagItem extends BaseItem
 }
 
 module.exports = FlagItem
-},{"./baseItem":6}],10:[function(require,module,exports){
+},{"./baseItem":5}],9:[function(require,module,exports){
 /* globals io, window */
 
 // tool de test_ coverage && coverall
@@ -557,7 +508,7 @@ window.game = game
 
 game.run()
 
-},{"./gameClient":12,"./globals":14}],11:[function(require,module,exports){
+},{"./gameClient":11,"./globals":13}],10:[function(require,module,exports){
 const GameObject = require('./gameObject')
 /**
  * A camera that foucus the scene in some part of the game world or to a game object
@@ -609,7 +560,7 @@ class GameCamera extends GameObject {
 
 module.exports = GameCamera
 
-},{"./gameObject":13}],12:[function(require,module,exports){
+},{"./gameObject":12}],11:[function(require,module,exports){
 /* globals requestAnimationFrame, window, $  */
 let Render = require('./render')
 let Tank = require('./tank')
@@ -628,7 +579,7 @@ let utils = require("./utils")
 let Network = require('./net')
 const deepEqual = require('deep-equal')
 // I use a improved version. I do the modifications here for compatibility in heroku
-const kb = require('@dasilvacontin/keyboard')
+const kb = require('./keyboard')
 var keyCodes = {
   SPACE_BAR: 32,
 
@@ -1224,7 +1175,7 @@ class GameClient {
 
 module.exports = GameClient
 
-},{"./ammoItem":5,"./baseItem":6,"./baseProjectile":7,"./flagItem":9,"./gameCamera":11,"./globals":14,"./healthItem":15,"./map":16,"./net":18,"./render":22,"./tank":25,"./utils":26,"@dasilvacontin/keyboard":1,"deep-equal":2}],13:[function(require,module,exports){
+},{"./ammoItem":4,"./baseItem":5,"./baseProjectile":6,"./flagItem":8,"./gameCamera":10,"./globals":13,"./healthItem":14,"./keyboard":15,"./map":16,"./net":18,"./render":22,"./tank":25,"./utils":26,"deep-equal":1}],12:[function(require,module,exports){
 const Renderable = require('./renderable')
 
 /**
@@ -1370,7 +1321,7 @@ class GameObject extends Renderable {
 
 module.exports = GameObject
 
-},{"./renderable":23}],14:[function(require,module,exports){
+},{"./renderable":23}],13:[function(require,module,exports){
 let globals = {
 
   vars: {},
@@ -1409,7 +1360,7 @@ let globals = {
 
 module.exports = globals
 
-},{}],15:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 let BaseItem = require('./baseItem')
 let Rectangle = require('./rectangle')
 class HealthItem extends BaseItem
@@ -1456,7 +1407,55 @@ class HealthItem extends BaseItem
 }
 
 module.exports = HealthItem
-},{"./baseItem":6,"./rectangle":21}],16:[function(require,module,exports){
+},{"./baseItem":5,"./rectangle":21}],15:[function(require,module,exports){
+'use strict'
+var keys = []
+exports.debug = false
+
+var keyCodes = {
+  SPACE_BAR: 32,
+
+  LEFT_ARROW: 37,
+  UP_ARROW: 38,
+  RIGHT_ARROW: 39,
+  DOWN_ARROW: 40,
+  A: 65,
+  W: 85,
+  S: 83,
+  D: 68,
+  Q: 81
+}
+for (var keyName in keyCodes) {
+  exports[keyName] = keyCodes[keyName]
+}
+
+exports.isKeyDown = function (keyCode) {
+  if (typeof keyCode === 'number') return Boolean(keys[keyCode])
+  if (typeof keyCode === 'string' && keyCode.length === 1) {
+    var letter = keyCode.toUpperCase()
+    return Boolean(keys[letter.charCodeAt(0)])
+  }
+  throw new TypeError(
+    '`isKeyDown` expected keyCode (`number`) or character. Got ' + keyCode + '.'
+  )
+}
+
+document.addEventListener('keydown', function (e) {
+  keys[e.keyCode] = true
+  if (exports.debug) {
+    var letter = String.fromCharCode(e.keyCode)
+    console.log('-- keyIsDown ASCII(' + e.keyCode + ') CHAR(' + letter + ')')
+  }
+})
+
+document.addEventListener('keyup', function (e) {
+  keys[e.keyCode] = false
+  if (exports.debug) {
+    var letter = String.fromCharCode(e.keyCode)
+    console.log('-- keyIsUp ASCII(' + e.keyCode + ') CHAR(' + letter + ')')
+  }
+})
+},{}],16:[function(require,module,exports){
 const MapChunk = require('./mapChunk')
 /**
  * @class {Map} Map
@@ -1741,7 +1740,7 @@ class Player extends GameObject {
 
 module.exports = Player
 
-},{"./gameObject":13}],20:[function(require,module,exports){
+},{"./gameObject":12}],20:[function(require,module,exports){
 const Renderable = require('./renderable')
 class Point extends Renderable
 {
@@ -1865,7 +1864,7 @@ if(!globals.getGlobal("SERVER")){
 }else{
   module.exports = null
 }
-},{"./globals":14}],23:[function(require,module,exports){
+},{"./globals":13}],23:[function(require,module,exports){
 const Render = require('./render') // Instance of GFX
 let globals = require('./globals');
 /**
@@ -1896,7 +1895,7 @@ class Renderable {
 module.exports = Renderable
 
 
-},{"./globals":14,"./render":22}],24:[function(require,module,exports){
+},{"./globals":13,"./render":22}],24:[function(require,module,exports){
 /* globals window */
 const globals = require("./globals");
 
@@ -2051,7 +2050,7 @@ class Segment extends Renderable
 
 module.exports = Segment
 
-},{"./globals":14,"./point":20,"./renderable":23,"./vector":27}],25:[function(require,module,exports){
+},{"./globals":13,"./point":20,"./renderable":23,"./vector":27}],25:[function(require,module,exports){
 let globals = require('./globals');
 const utils = require('./utils')
 const Player = require('./player')
@@ -2316,7 +2315,7 @@ class Tank extends Player
 }
 module.exports = Tank
 
-},{"./baseProjectile":7,"./globals":14,"./player":19,"./rectangle":21,"./segment":24,"./utils":26}],26:[function(require,module,exports){
+},{"./baseProjectile":6,"./globals":13,"./player":19,"./rectangle":21,"./segment":24,"./utils":26}],26:[function(require,module,exports){
 let globals = require("./globals")
 let ACCEL = globals.getGlobal("ACCEL");
 if(!ACCEL){
@@ -2354,7 +2353,7 @@ module.exports = {
 
 }
 
-},{"./globals":14}],27:[function(require,module,exports){
+},{"./globals":13}],27:[function(require,module,exports){
 const Renderable = require('./renderable')
 class Vector extends Renderable
 {
@@ -2408,4 +2407,4 @@ class Vector extends Renderable
 
 module.exports = Vector
 
-},{"./renderable":23}]},{},[10]);
+},{"./renderable":23}]},{},[9]);

@@ -16,7 +16,7 @@ let utils = require("./utils")
 let Network = require('./net')
 const deepEqual = require('deep-equal')
 // I use a improved version. I do the modifications here for compatibility in heroku
-const kb = require('@dasilvacontin/keyboard')
+const kb = require('./keyboard')
 var keyCodes = {
   SPACE_BAR: 32,
 
